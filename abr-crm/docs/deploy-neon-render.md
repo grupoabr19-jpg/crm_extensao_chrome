@@ -32,7 +32,7 @@ Runtime: Node
 Branch: master
 Root Directory: abr-crm
 Build Command: npm ci
-Start Command: npm run api:start
+Start Command: npm start
 Instance Type: Free
 Health Check Path: /healthz
 ```

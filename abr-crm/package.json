@@ -2,11 +2,15 @@
   "name": "abr-crm",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "workspaces": [
     "packages/*",
     "apps/*"
   ],
   "scripts": {
+    "start": "npm run api:start",
     "api:dev": "npm run dev --workspace @abr/api",
     "api:start": "npm run start --workspace @abr/api",
     "db:migrate": "npm run db:migrate --workspace @abr/api",
