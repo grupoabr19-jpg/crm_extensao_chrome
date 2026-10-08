@@ -154,9 +154,8 @@ function requireRoles(req, res, roles) {
 
 function requireAdmin(req, res) {
   if (!API_ADMIN_TOKEN) return true;
-  const got = req.headers.authorization || req.headers["x-api-admin-token"] || "";
-  const token = String(got).replace(/^Bearer\s+/i, "");
-  if (token === API_ADMIN_TOKEN) return true;
+  const adminToken = String(req.headers["x-api-admin-token"] || "");
+  if (adminToken === API_ADMIN_TOKEN) return true;
   send(res, 401, { error: "unauthorized" });
   return false;
 }
@@ -325,6 +324,7 @@ async function handler(req, res) {
       const result = await storage.createCase(body);
       if (result.error === "invalid_phone") return send(res, 422, result);
       if (result.error === "invalid_sale_value") return send(res, 422, result);
+      if (result.error === "customer_not_found") return send(res, 404, result);
       return send(res, 201, result);
     }
 
@@ -338,9 +338,16 @@ async function handler(req, res) {
       return send(res, 200, result);
     }
 
+    if (req.method === "GET" && url.pathname === "/v1/customers") {
+      await storage.ready();
+      return send(res, 200, await storage.searchCustomers(url.searchParams.get("q")));
+    }
+
     if (req.method === "GET" && url.pathname === "/v1/cases") {
       await storage.ready();
-      return send(res, 200, await storage.listCases());
+      return send(res, 200, await storage.listCases({
+        customerCode: url.searchParams.get("customer_code")
+      }));
     }
 
     if (req.method === "GET" && url.pathname === "/v1/reports/kpis") {

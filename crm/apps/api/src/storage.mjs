@@ -281,7 +281,7 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
         id: randomUUID(),
         protocol: publicProtocol,
         status: "awaiting_arrival",
-        contact: { name: String(body.name || "").trim() || null, phone: phone.e164, original_phone: phone.original },
+        contact: { name: String(body.name || "").trim() || null, phone: phone.e164, original_phone: phone.original, customer_code: null },
         fields: {
           company: body.company || null,
           city: body.city || null,
@@ -351,7 +351,31 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
       found.updated_at = new Date().toISOString();
       return { case: found };
     },
-    listCases: async () => ({ items: db.cases, total: db.cases.length }),
+    searchCustomers: async (query) => {
+      const term = String(query || "").trim().toLocaleLowerCase("pt-BR");
+      const all = Array.from(new Map(db.cases.map((item) => [item.contact.phone, {
+        id: item.contact.customer_id || item.contact.phone,
+        customer_code: item.contact.customer_code || null,
+        name: item.contact.name,
+        phone: item.contact.phone,
+        city: item.fields.city,
+        uf: item.fields.uf,
+        profile: {},
+        case_count: db.cases.filter((candidate) => candidate.contact.phone === item.contact.phone).length
+      }])).values());
+      if (term.length < 2) return { items: [], total: all.length };
+      const items = all
+        .filter((item) => `${item.name || ""} ${item.customer_code || ""}`.toLocaleLowerCase("pt-BR").includes(term)
+          || String(item.customer_code || "").toLowerCase().startsWith(term))
+        .slice(0, 25);
+      return { items, total: all.length };
+    },
+    listCases: async (options = {}) => {
+      const items = options.customerCode
+        ? db.cases.filter((item) => item.contact.customer_code === options.customerCode)
+        : db.cases;
+      return { items, total: items.length };
+    },
     listFunnels: async () => ({ items: memoryFunnels() }),
     funnelBoard: async (pipelineId) => {
       const funnel = memoryFunnels().find((f) => f.id === pipelineId || f.name === pipelineId) || memoryFunnels()[0];
@@ -684,7 +708,7 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       id: row.id,
       protocol: row.protocol,
       status: row.status,
-      contact: { name: row.contact_name, phone: row.contact_phone, original_phone: row.original_phone },
+      contact: { id: row.contact_id, name: row.contact_name, phone: row.contact_phone, original_phone: row.original_phone, customer_code: row.customer_code },
       fields: {
         company: row.company_name,
         city: row.city,
@@ -729,7 +753,7 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
   }
 
   const caseSelect = `
-    select c.id, h.protocol, c.status, co.display_name contact_name, ci.e164 contact_phone, ci.original original_phone,
+    select c.id, c.contact_id, h.protocol, c.status, co.display_name contact_name, co.customer_code, ci.e164 contact_phone, ci.original original_phone,
       c.company_name, c.city, c.uf, s.label segment_label, c.need, d.name department_name,
       p.name pipeline_name, ps.name stage_name, c.potential, c.temperature, c.sale_value, src.name source_name,
       c.owner_user_id, u.display_name owner_name, coalesce(wa.e164, hwa.e164) owner_phone, ca.reason routing_reason,
@@ -912,7 +936,23 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       const pipeline = await defaultPipeline(ctx.org.id, body.pipeline);
       const stage = await defaultStage(pipeline?.id, body.stage);
       const source = body.source ? await one("select id,name from acquisition_sources where organization_id=$1 and lower(name)=lower($2) limit 1", [ctx.org.id, body.source]) : null;
-      const contact = await ensureContact(ctx.org.id, phone, contactName);
+      let contact;
+      const customerCode = String(body.customerCode || "").trim().toUpperCase();
+      if (customerCode) {
+        contact = await one(
+          "select id, display_name from contacts where organization_id=$1 and customer_code=$2 limit 1",
+          [ctx.org.id, customerCode]
+        );
+        if (!contact) return { error: "customer_not_found" };
+        await pool.query(`
+          insert into contact_identifiers(organization_id,contact_id,kind,e164,original,source,reliable)
+          values($1,$2,'phone',$3,$4,'mvp_panel',true)
+          on conflict (organization_id,contact_id,e164) do update
+            set original=excluded.original, source='mvp_panel', reliable=true
+        `, [ctx.org.id, contact.id, phone.e164, phone.original]);
+      } else {
+        contact = await ensureContact(ctx.org.id, phone, contactName);
+      }
       const publicProtocol = protocol();
       const client = await pool.connect();
       try {
@@ -1044,9 +1084,46 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       const crmCase = shapeCase(await one(`${caseSelect} where c.id=$1 order by h.created_at desc limit 1`, [caseId]));
       return { case: crmCase };
     },
-    listCases: async () => {
-      await ready();
-      const rows = await many(`${caseSelect} order by c.created_at desc limit 100`);
+    searchCustomers: async (query) => {
+      const ctx = await ready();
+      const term = String(query || "").trim().slice(0, 120);
+      if (term.length < 2) {
+        const count = await one("select count(*)::int as total from contacts where organization_id=$1", [ctx.org.id]);
+        return { items: [], total: count.total };
+      }
+      const codePrefix = /^\d+$/.test(term) ? `C${term}` : term.toUpperCase();
+      const rows = await many(`
+        select co.id, co.customer_code, co.display_name as name, co.customer_profile as profile,
+          ci.e164 as phone, ci.original as original_phone,
+          count(distinct c.id)::int as case_count,
+          max(c.updated_at)::text as last_case_at,
+          max(coalesce(c.city, co.customer_profile->>'city')) as city,
+          max(coalesce(c.uf, co.customer_profile->>'uf')) as uf
+        from contacts co
+        left join lateral (
+          select e164, original
+          from contact_identifiers
+          where organization_id=co.organization_id and contact_id=co.id and kind='phone'
+          order by (source='mvp_panel') desc, reliable desc, id
+          limit 1
+        ) ci on true
+        left join cases c on c.contact_id=co.id and c.organization_id=co.organization_id
+        where co.organization_id=$1
+          and (position(lower($2) in lower(coalesce(co.display_name,''))) > 0
+            or co.customer_code ilike $3)
+        group by co.id, co.customer_code, co.display_name, co.customer_profile, ci.e164, ci.original
+        order by case when lower(co.customer_code)=$4 then 0 else 1 end,
+          case when count(distinct c.id)>0 then 0 else 1 end,
+          max(c.updated_at) desc nulls last, co.display_name
+        limit 25
+      `, [ctx.org.id, term, `${codePrefix.replace(/[%_\\\\]/g, "")}%`, term.toUpperCase()]);
+      return { items: rows, total: rows.length };
+    },
+    listCases: async (options = {}) => {
+      const ctx = await ready();
+      const rows = options.customerCode
+        ? await many(`${caseSelect} where c.organization_id=$1 and co.customer_code=$2 order by c.updated_at desc limit 100`, [ctx.org.id, options.customerCode])
+        : await many(`${caseSelect} where c.organization_id=$1 order by c.created_at desc limit 100`, [ctx.org.id]);
       const items = rows.map(shapeCase);
       return { items, total: items.length };
     },

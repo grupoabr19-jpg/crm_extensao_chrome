@@ -7,7 +7,7 @@ O CRM web tambem e servido pela API em `/crm`. Esta tela abre fora do WhatsApp e
 ## Segredos e acessos
 
 - `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `GROQ_API_KEY` e `AUTH_SIGNING_SECRET` devem existir apenas no backend.
-- `API_ADMIN_TOKEN` protege testes administrativos como IA e transferencia de teste. Use o mesmo valor apenas em ambiente seguro para smoke tests.
+- `API_ADMIN_TOKEN` protege testes administrativos como IA e transferencia de teste. Envie-o no cabeçalho `x-api-admin-token`, junto com a sessão de usuário administrador no cabeçalho `Authorization: Bearer ...`.
 - `GROQ_MODEL` define o modelo usado no teste da IA. Se ficar vazio ou com placeholder, a API usa `openai/gpt-oss-120b`. `GROQ_BASE_URL` pode ficar em `https://api.groq.com/openai/v1`.
 - `POST /v1/ai/test` funciona localmente mesmo sem `GROQ_API_KEY`: quando a chave nao existe ou e placeholder, a API devolve um stub seguro `OK` para manter o smoke test e a validação inicial funcionando sem dependência externa.
 - `ABR_TEST_CUSTOMER_PHONE`,  `ABR_TEST_DESTINATION_PHONE` e `ABR_TEST_DESTINATION_NAME` alimentam o smoke test de transferencia sem depender de clientes reais.
@@ -111,3 +111,22 @@ cd crm
 $env:ABR_API_BASE_URL = "https://SEU-SERVICO.onrender.com"
 npm run smoke:test
 ```
+
+Para testar somente a conexão com a IA, entre no CRM como administrador e, no console de desenvolvedor dessa mesma página, execute:
+
+```js
+const adminToken = prompt("Informe o API_ADMIN_TOKEN sem compartilhá-lo");
+const sessionToken = sessionStorage.getItem("abrCrmSession");
+fetch("/v1/ai/test", {
+  method: "POST",
+  headers: {
+    "content-type": "application/json",
+    "authorization": `Bearer ${sessionToken}`,
+    "x-api-admin-token": adminToken
+  },
+  body: JSON.stringify({ prompt: "Responda somente OK para confirmar o teste tecnico do CRM ABR." })
+}).then(async (response) => ({ status: response.status, body: await response.json() }))
+  .then(console.log);
+```
+
+Uma resposta com `ok: true` e `offline` ausente confirma que o backend chamou a Groq. `offline: true` indica que o backend não recebeu uma chave Groq utilizável. Este teste verifica conectividade e resposta do modelo, não leitura/OCR de conversas do WhatsApp.
