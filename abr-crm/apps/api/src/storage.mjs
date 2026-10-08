@@ -251,6 +251,12 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
       db.sellers.unshift(seller);
       return { seller };
     },
+    deactivateSeller: async (profileId) => {
+      const seller = db.sellers.find((item) => item.id === profileId || item.profile_id === profileId);
+      if (!seller) return { error: "seller_not_found" };
+      seller.active = false;
+      return { ok: true, profile_id: profileId };
+    },
     createCase: async (body) => {
       const phone = normalizePhone(body.phone || "");
       if (!phone.ok) return { error: "invalid_phone", detail: phone.reason };
@@ -741,6 +747,7 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
         join users u on u.id=sp.user_id
         left join seller_routes sr on sr.profile_id=sp.id
         where sp.organization_id=$1
+          and sp.active=true
         group by sp.id, u.id
         order by sp.sales_function, u.display_name
       `, [ctx.org.id]);
@@ -749,10 +756,14 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
     createSeller: async (body) => {
       const ctx = await ready();
       const displayName = String(body.name || body.displayName || "").trim();
-      const email = String(body.email || "").trim().toLowerCase();
+      const loginOrEmail = String(body.email || body.login || "").trim().toLowerCase();
+      const email = loginOrEmail.includes("@") ? loginOrEmail : `${loginOrEmail}@grupoabr.com.br`;
       if (!displayName || !email) return { error: "missing_seller_identity" };
       const salesFunction = inferSalesFunction(body);
-      const role = salesFunction === "adm_sdr" ? "admin" : "seller";
+      const requestedRole = String(body.role || "").trim().toLowerCase();
+      const role = ["admin", "supervisor", "sdr", "seller", "department_staff"].includes(requestedRole)
+        ? requestedRole
+        : (salesFunction === "adm_sdr" ? "admin" : "seller");
       const user = await ensureUser(ctx.org.id, email, displayName, role);
       await pool.query("update users set display_name=$2, role=$3, status='active' where id=$1", [user.id, displayName, role]);
       const whatsapp = normalizePhone(body.whatsapp || body.whatsapp_e164 || "");
@@ -790,6 +801,15 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
         where sp.id=$1
       `, [profile.id]);
       return { seller };
+    },
+    deactivateSeller: async (profileId) => {
+      const ctx = await ready();
+      const found = await one("select sp.id, sp.user_id from seller_profiles sp where sp.organization_id=$1 and sp.id=$2", [ctx.org.id, profileId]);
+      if (!found) return { error: "seller_not_found" };
+      await pool.query("update seller_profiles set active=false where id=$1", [profileId]);
+      await pool.query("update seller_routes set active=false where profile_id=$1", [profileId]);
+      await pool.query("update users set status='disabled' where id=$1", [found.user_id]);
+      return { ok: true, profile_id: profileId };
     },
     createCase: async (body) => {
       const ctx = await ready();

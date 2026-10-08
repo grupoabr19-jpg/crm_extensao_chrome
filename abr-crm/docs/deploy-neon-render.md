@@ -72,6 +72,7 @@ Antes de producao, ajuste:
 - `POST /v1/tests/transfer`: cria um lead de teste e prepara handoff/outbox para validar transferencia entre numeros.
 - `GET /v1/sellers`: vendedores/perfis/rotas de atendimento.
 - `POST /v1/sellers`: cadastrar ou atualizar vendedor, funcao comercial e rotas.
+- `DELETE /v1/sellers/:id`: retirar colaborador ativo do roteamento.
 - `GET /v1/funnels`: funis e etapas.
 - `GET /v1/funnels/:id/board`: Kanban de um funil.
 - `POST /v1/cases/:id/stage`: mover lead de etapa.

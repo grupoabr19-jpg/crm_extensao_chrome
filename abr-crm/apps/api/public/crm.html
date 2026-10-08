@@ -21,15 +21,17 @@
     .card{background:#fff;border:1px solid #d9e0ec;border-radius:9px;padding:10px;box-shadow:0 1px 2px #0000000d;cursor:grab}.card:active{cursor:grabbing}.card b{display:block;font-size:13px;color:#172033;margin-bottom:5px}
     .line{font-size:11px;color:#5b667a;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}.tag{font-size:10px;border-radius:999px;padding:3px 6px;background:#eef1f8;color:#253575}.tag.hot{background:#fff1e3;color:#9a4d00}.tag.status{background:#e9f8ef;color:#146c3b;min-width:auto;text-align:left}
     .empty{font-size:12px;color:#667085;padding:10px}.drawer{position:fixed;right:0;top:0;width:430px;max-width:100vw;height:100vh;background:#fff;border-left:1px solid #d8deea;box-shadow:-12px 0 30px #0002;display:none;flex-direction:column}.drawer.open{display:flex}.drawer header{height:auto;display:block;padding:18px}.drawerBody{padding:0 18px 18px;overflow:auto}.kv{display:grid;grid-template-columns:110px 1fr;gap:8px;font-size:12px;margin:8px 0}.kv span:first-child{color:#667085}.close{position:absolute;top:12px;right:12px}.panel{border-top:1px solid #edf0f5;margin-top:14px;padding-top:12px}.panel h2{font-size:13px;color:#253575;margin:0 0 8px}.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.kpis{display:flex;gap:8px;padding:10px 18px;background:#fff;border-bottom:1px solid #dde3ee}.kpi{border:1px solid #e0e5ee;border-radius:8px;padding:8px 10px;min-width:110px}.kpi b{display:block;color:#253575}.kpi span{font-size:11px;color:#667085}
+    .view{display:none;min-height:0}.view.active{display:flex}.admin{flex:1;overflow:auto;padding:18px;display:block}.adminGrid{display:grid;grid-template-columns:360px 1fr;gap:18px;align-items:start}.formBox,.tableBox{background:#fff;border:1px solid #dde3ee;border-radius:10px;padding:14px}.formBox h2,.tableBox h2{font-size:15px;color:#253575;margin:0 0 12px}.formBox label{display:block;font-size:11px;color:#667085;margin:9px 0 4px}.formBox input,.formBox select{width:100%}.routesLine{display:grid;grid-template-columns:1fr 1fr;gap:8px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border-bottom:1px solid #edf0f5;text-align:left;padding:8px;vertical-align:top}th{color:#253575;background:#f6f8fc}.muted{color:#667085;font-size:11px}.pill{display:inline-block;border-radius:999px;background:#eef1f8;color:#253575;padding:3px 7px;margin:1px;font-size:10px}.pill.off{background:#f2e5e3;color:#9f2d20}
   </style>
 </head>
 <body>
   <div class="app">
     <nav class="rail">
       <div class="logo">ABR</div>
-      <button class="active" title="Funis">▦</button>
+      <button class="active" title="Funis" id="navBoard">▦</button>
       <button title="Atendimentos">☰</button>
       <button title="Relatorios">◷</button>
+      <button title="Configuracoes ADM" id="navAdmin">⚙</button>
       <div style="flex:1"></div>
       <button title="Atualizar" id="railRefresh">↻</button>
     </nav>
@@ -46,7 +48,32 @@
         </div>
       </header>
       <section class="kpis" id="kpis"></section>
-      <section class="board" id="board"></section>
+      <section class="board view active" id="board"></section>
+      <section class="admin view" id="admin">
+        <div class="adminGrid">
+          <div class="formBox">
+            <h2>Colaborador</h2>
+            <label>Nome</label><input id="sellerName" placeholder="Nome completo">
+            <label>Login ou e-mail</label><input id="sellerEmail" placeholder="nome.sobrenome">
+            <label>Perfil de acesso</label>
+            <select id="sellerRole"><option value="seller">Vendedor</option><option value="supervisor">Supervisor</option><option value="admin">ADM</option><option value="sdr">SDR</option></select>
+            <label>Tipo de atendimento</label>
+            <select id="sellerFunction"><option value="especialista">Especialista VARE</option><option value="corporativo">Corporativo VCORP</option><option value="vendedor_externo">Vendedor externo VEXT</option><option value="construcao_civil">Construção civil</option><option value="adm_sdr">ADM - SDR</option></select>
+            <label>WhatsApp atendido</label><input id="sellerWhatsapp" placeholder="+5535999990000">
+            <div class="routesLine">
+              <div><label>Canal</label><select id="routeChannel"><option value="varejo">Varejo</option><option value="atacado">Atacado</option></select></div>
+              <div><label>Tipo rota</label><select id="routeType"><option value="region">Região</option><option value="ddd">DDD</option><option value="city">Cidade</option></select></div>
+            </div>
+            <label>Rota</label><input id="routeValue" placeholder="JUNDIAI ou 11">
+            <div class="actions"><button id="saveSeller">Salvar colaborador</button><button class="secondary" id="clearSeller">Limpar</button></div>
+            <p class="muted">Senha inicial para novos colaboradores: ABR@2026.</p>
+          </div>
+          <div class="tableBox">
+            <h2>Equipe e rotas</h2>
+            <table><thead><tr><th>Colaborador</th><th>Acesso</th><th>Atendimento</th><th>Rotas</th><th></th></tr></thead><tbody id="sellerRows"></tbody></table>
+          </div>
+        </div>
+      </section>
     </main>
   </div>
   <aside class="drawer" id="drawer">
@@ -56,7 +83,7 @@
   </aside>
   <script>
     const api = location.origin;
-    const state = { funnels: [], board: null, active: null, dragged: null, query: "", selected: null };
+    const state = { funnels: [], board: null, active: null, dragged: null, query: "", selected: null, sellers: [] };
     const $ = (id) => document.getElementById(id);
     const say = (m) => $('status').textContent = m;
     async function json(path, opts) {
@@ -102,6 +129,13 @@
           await moveCard(state.dragged, zone.dataset.stage);
         });
       });
+    }
+    function showView(name) {
+      $('board').classList.toggle('active', name === 'board');
+      $('admin').classList.toggle('active', name === 'admin');
+      $('navBoard').classList.toggle('active', name === 'board');
+      $('navAdmin').classList.toggle('active', name === 'admin');
+      if (name === 'admin') loadSellers().catch(err => say('Erro: ' + err.message));
     }
     function renderCard(card) {
       const name = card.contact?.name || card.contact?.phone || 'Lead sem nome';
@@ -202,6 +236,79 @@
         ['Follow-ups abertos', tasks.open || 0]
       ].map(([label,value]) => `<div class="kpi"><b>${escapeHtml(value)}</b><span>${escapeHtml(label)}</span></div>`).join('');
     }
+    function attendanceLabel(fn) {
+      return { especialista: 'VARE', corporativo: 'VCORP', vendedor_externo: 'VEXT', construcao_civil: 'CIVIL', adm_sdr: 'ADM/SDR' }[fn] || fn || '-';
+    }
+    function renderSellers() {
+      $('sellerRows').innerHTML = state.sellers.map(s => {
+        const routes = (s.routes || []).filter(r => r.active !== false).map(r => `<span class="pill">${escapeHtml(r.channel)} ${escapeHtml(r.route_type)} ${escapeHtml(r.route_value)}</span>`).join('') || '<span class="muted">Sem rota</span>';
+        return `<tr>
+          <td><b>${escapeHtml(s.name)}</b><div class="muted">${escapeHtml(s.email || '')}</div>${s.whatsapp_e164 ? `<div class="muted">${escapeHtml(s.whatsapp_e164)}</div>` : ''}</td>
+          <td>${escapeHtml(s.role || '-')} ${s.active ? '' : '<span class="pill off">inativo</span>'}</td>
+          <td><span class="pill">${escapeHtml(attendanceLabel(s.sales_function))}</span><div class="muted">${escapeHtml(s.profile_title || '')}</div></td>
+          <td>${routes}</td>
+          <td><button class="secondary" data-edit="${s.profile_id}">Editar</button> <button class="danger" data-off="${s.profile_id}">Retirar</button></td>
+        </tr>`;
+      }).join('');
+      document.querySelectorAll('[data-edit]').forEach(btn => btn.onclick = () => fillSeller(btn.dataset.edit));
+      document.querySelectorAll('[data-off]').forEach(btn => btn.onclick = () => deactivateSeller(btn.dataset.off));
+    }
+    async function loadSellers() {
+      say('Carregando colaboradores...');
+      const data = await json('/v1/sellers');
+      state.sellers = data.items || [];
+      renderSellers();
+      say('Colaboradores atualizados.');
+    }
+    function fillSeller(profileId) {
+      const s = state.sellers.find(item => item.profile_id === profileId);
+      if (!s) return;
+      $('sellerName').value = s.name || '';
+      $('sellerEmail').value = s.email || '';
+      $('sellerRole').value = s.role || 'seller';
+      $('sellerFunction').value = s.sales_function || 'especialista';
+      $('sellerWhatsapp').value = s.whatsapp_e164 || '';
+      const r = (s.routes || []).find(route => route.active !== false);
+      $('routeChannel').value = r?.channel || 'varejo';
+      $('routeType').value = r?.route_type || 'region';
+      $('routeValue').value = r?.route_value || '';
+    }
+    function clearSellerForm() {
+      ['sellerName','sellerEmail','sellerWhatsapp','routeValue'].forEach(id => $(id).value = '');
+      $('sellerRole').value = 'seller';
+      $('sellerFunction').value = 'especialista';
+      $('routeChannel').value = 'varejo';
+      $('routeType').value = 'region';
+    }
+    async function saveSeller() {
+      const routeValue = $('routeValue').value.trim();
+      const body = {
+        name: $('sellerName').value.trim(),
+        email: $('sellerEmail').value.trim(),
+        role: $('sellerRole').value,
+        salesFunction: $('sellerFunction').value,
+        profileTitle: attendanceLabel($('sellerFunction').value),
+        whatsapp: $('sellerWhatsapp').value.trim(),
+        routes: routeValue ? [{
+          channel: $('routeChannel').value,
+          salesFunction: $('sellerFunction').value,
+          routeType: $('routeType').value,
+          routeValue,
+          region: $('routeType').value === 'region' ? routeValue : null,
+          priority: 10
+        }] : []
+      };
+      await json('/v1/sellers', { method: 'POST', body: JSON.stringify(body) });
+      clearSellerForm();
+      await loadSellers();
+      say('Colaborador salvo.');
+    }
+    async function deactivateSeller(profileId) {
+      if (!confirm('Retirar este colaborador do roteamento?')) return;
+      await fetch(api + `/v1/sellers/${encodeURIComponent(profileId)}`, { method: 'DELETE' });
+      await loadSellers();
+      say('Colaborador retirado.');
+    }
     async function loadFunnels() {
       say('Carregando funis...');
       const data = await json('/v1/funnels');
@@ -223,8 +330,12 @@
     $('funnel').onchange = async () => { state.active = $('funnel').value; await loadBoard(); };
     $('refresh').onclick = async () => { await loadFunnels(); await loadBoard(); };
     $('railRefresh').onclick = $('refresh').onclick;
+    $('navBoard').onclick = () => showView('board');
+    $('navAdmin').onclick = () => showView('admin');
     $('kpiBtn').onclick = loadKpis;
     $('exportBtn').onclick = () => { location.href = api + '/v1/reports/cases.csv'; };
+    $('saveSeller').onclick = saveSeller;
+    $('clearSeller').onclick = clearSellerForm;
     $('search').oninput = () => { state.query = $('search').value; renderBoard(); };
     $('close').onclick = () => $('drawer').classList.remove('open');
     loadFunnels().then(loadBoard).then(loadKpis).catch(err => say('Erro: ' + err.message));

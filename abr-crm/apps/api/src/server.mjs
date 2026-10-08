@@ -222,6 +222,14 @@ async function handler(req, res) {
       return send(res, 201, result);
     }
 
+    const sellerDelete = /^\/v1\/sellers\/([^/]+)$/.exec(url.pathname);
+    if (req.method === "DELETE" && sellerDelete) {
+      await storage.ready();
+      const result = await storage.deactivateSeller(decodeURIComponent(sellerDelete[1]));
+      if (result.error === "seller_not_found") return send(res, 404, result);
+      return send(res, 200, result);
+    }
+
     if (req.method === "POST" && url.pathname === "/v1/cases") {
       const body = await readBody(req);
       await storage.ready();
