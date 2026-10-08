@@ -9,6 +9,7 @@ O CRM web tambem e servido pela API em `/crm`. Esta tela abre fora do WhatsApp e
 - `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `GROQ_API_KEY` e `AUTH_SIGNING_SECRET` devem existir apenas no backend.
 - `API_ADMIN_TOKEN` protege testes administrativos como IA e transferencia de teste. Envie-o no cabeçalho `x-api-admin-token`, junto com a sessão de usuário administrador no cabeçalho `Authorization: Bearer ...`.
 - `GROQ_MODEL` define o modelo usado no teste da IA. Se ficar vazio ou com placeholder, a API usa `openai/gpt-oss-120b`. `GROQ_BASE_URL` pode ficar em `https://api.groq.com/openai/v1`.
+- `GROQ_VISION_MODEL` define o modelo de leitura visual; o padrão é `qwen/qwen3.8-27b`.
 - `POST /v1/ai/test` funciona localmente mesmo sem `GROQ_API_KEY`: quando a chave nao existe ou e placeholder, a API devolve um stub seguro `OK` para manter o smoke test e a validação inicial funcionando sem dependência externa.
 - `ABR_TEST_CUSTOMER_PHONE`,  `ABR_TEST_DESTINATION_PHONE` e `ABR_TEST_DESTINATION_NAME` alimentam o smoke test de transferencia sem depender de clientes reais.
 - Nunca coloque valores reais em `.env.example`, no build da extensao ou em logs.
@@ -70,6 +71,7 @@ Antes de producao, ajuste:
 
 - `GET /crm`: Kanban externo do CRM.
 - `POST /v1/ai/test`: teste protegido de conectividade com a IA.
+- `POST /v1/ai/vision-test`: teste protegido de OCR/interpretação de uma imagem PNG, JPEG ou WebP (máximo de 4 MiB); não altera fichas nem envia mensagens.
 - `POST /v1/tests/transfer`: cria um lead de teste e prepara handoff/outbox para validar transferencia entre numeros.
 - `GET /v1/sellers`: vendedores/perfis/rotas de atendimento.
 - `POST /v1/sellers`: cadastrar ou atualizar vendedor, funcao comercial e rotas.
@@ -130,3 +132,39 @@ fetch("/v1/ai/test", {
 ```
 
 Uma resposta com `ok: true` e `offline` ausente confirma que o backend chamou a Groq. `offline: true` indica que o backend não recebeu uma chave Groq utilizável. Este teste verifica conectividade e resposta do modelo, não leitura/OCR de conversas do WhatsApp.
+
+Para testar leitura visual, use uma captura fictícia ou anonimizada. O endpoint encaminha a imagem selecionada ao provedor Groq; não envie imagens com dados de clientes sem autorização adequada. Após entrar no CRM como administrador, execute no console do navegador:
+
+```js
+const input = document.createElement("input");
+input.type = "file";
+input.accept = "image/png,image/jpeg,image/webp";
+input.onchange = async () => {
+  const file = input.files?.[0];
+  if (!file || file.size > 4 * 1024 * 1024) {
+    console.error("Selecione uma imagem de até 4 MiB.");
+    return;
+  }
+  const image = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+  const adminToken = prompt("Informe o API_ADMIN_TOKEN");
+  const sessionToken = sessionStorage.getItem("abrCrmSession");
+  const response = await fetch("/v1/ai/vision-test", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "authorization": `Bearer ${sessionToken}`,
+      "x-api-admin-token": adminToken
+    },
+    body: JSON.stringify({ image })
+  });
+  console.log({ status: response.status, result: await response.json() });
+};
+input.click();
+```
+
+O resultado é apenas uma sugestão para conferência humana. O reconhecimento pode errar textos, participantes e horários; não use a saída para encaminhamento automático sem validação adicional.
