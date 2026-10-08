@@ -1,7 +1,6 @@
 # CRM Grupo ABR — extensão Chrome sobre WhatsApp Web
 
-**Estado: Etapa 1–2 parcial (fundação).** Regras de negócio, contratos, banco e adaptador-esqueleto, testados.
-**Ainda NÃO é um MVP**: não há API HTTP, login, UI da extensão, painel admin, integração Groq, SSE nem deploy. Nada abaixo deve ser lido como "pronto".
+**Estado: CRM MVP em evolução.** A API HTTP, o painel web e a extensão integrada ao WhatsApp estão ativos; a automação de mensagens continua desabilitada e o sistema deve ser validado em cada ambiente.
 
 ## Rodar
 ```bash
@@ -9,6 +8,12 @@ npm install
 npm test            # 56 testes (domínio, migration em Postgres real via PGlite, extensão-esqueleto)
 npm run typecheck   # tsc --strict
 ```
+
+## Acesso de operadores
+
+O CRM web e a extensão exigem autenticação antes de carregar dados. O login consulta usuários ativos da organização no banco e valida a senha contra o hash gravado em `users.password_hash`; nomes de usuário sem domínio são resolvidos como `@grupoabr.com.br`. A migration `0004_real_users_admin.sql` provisiona os perfis iniciais e a senha provisória solicitada, armazenada como hash.
+
+Todas as rotas `/v1/*`, exceto `POST /v1/auth/login`, exigem `Authorization: Bearer <token>`. A sessão dura 12 horas. O CRM web mantém o token apenas na aba atual; a extensão o mantém no armazenamento privado da extensão. Defina `AUTH_SIGNING_SECRET` no serviço da API com um segredo aleatório estável; sem ele, a API usa uma chave aleatória por processo e sessões ativas deixam de funcionar após reinicialização. Troque a senha provisória compartilhada dos operadores assim que houver fluxo de troca de senha disponível.
 
 ## O que existe e foi verificado
 | Parte | Evidência |

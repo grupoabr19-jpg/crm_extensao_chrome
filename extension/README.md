@@ -13,6 +13,8 @@ Com o painel expandido em uma janela com pelo menos 1200 px de largura, a extens
 
 A API padrão é `https://abr-crm-api.onrender.com`. A conexão pode ser testada e configurada no botão de engrenagem da barra. Configurações antigas que apontavam para `localhost:10000` são migradas para o Render na primeira inicialização após atualizar a extensão.
 
+Antes de carregar fichas ou usar qualquer função, entre com o e-mail corporativo (ou nome de usuário) e a senha do operador. O token é guardado no armazenamento privado da extensão e pode ser removido pelo botão **Encerrar sessão** em Configurações. O acesso também é validado pela API; abrir a página do CRM diretamente mostra o login, não os dados.
+
 Na guia **Configurações**, é possível ajustar o endereço da API, o perfil do dispositivo, o telefone local, os valores padrão da ficha e as opções de origem, segmento, departamento, funil, etapa, potencial e temperatura. As configurações ficam no armazenamento local da extensão. O identificador do dispositivo é gerado pelo backend e permanece somente leitura; credenciais administrativas e chaves de serviço não devem ser armazenadas na extensão.
 
 Na ficha, o seletor de cliente/funil/etapa usa os dados retornados por `/v1/cases` e `/v1/funnels`. Ao selecionar uma etapa, a extensão envia o mesmo `stageId` usado pelo Kanban para `POST /v1/cases/:id/stage`; a ficha e o card passam a refletir o mesmo funil e estágio. As etapas anteriores aparecem em cinza escuro e a atual em laranja. A barra lateral usa o logo oficial `brand-logo.png`.

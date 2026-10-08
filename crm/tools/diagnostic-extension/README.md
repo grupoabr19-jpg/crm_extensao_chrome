@@ -3,6 +3,11 @@
 Mede o que o WhatsApp Web permite OBSERVAR. **Não envia mensagens, não escreve na página, não faz requisições de rede.**
 Permissões: apenas `web.whatsapp.com` e `storage` (guarda o relatório no navegador, dentro da extensão).
 
+## Teste pela extensão CRM
+Na extensão CRM, abra a aba **Diagnóstico**. **Capturar estrutura** registra a estrutura da tela atual; **Observar 15s** mede mudanças na conversa durante 15 segundos. Essa versão envia os relatórios anonimizados para a API CRM, onde ficam registrados como observações.
+
+Esse primeiro teste valida se a interface do WhatsApp pode ser observada de forma estável; **ainda não envia o conteúdo para um modelo de IA nem lê o texto das mensagens**. Não envia mensagens e não altera a página.
+
 ## Instalar (nos dois Chromes)
 1. Extraia o zip. 2. `chrome://extensions` → ligue **Modo do desenvolvedor** → **Carregar sem compactação** → escolha a pasta.
 3. Abra/recarregue `web.whatsapp.com`. Aparece o botão **ABR diag** no canto superior direito.

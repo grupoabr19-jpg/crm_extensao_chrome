@@ -3,7 +3,6 @@ import { randomUUID } from "node:crypto";
 import { pgSslConfig } from "./env.mjs";
 
 const { Pool } = pg;
-const DEFAULT_EMPLOYEE_PASSWORD = "ABR@2026";
 
 export function normalizePhone(raw) {
   const original = String(raw || "").trim();
@@ -16,6 +15,14 @@ export function normalizePhone(raw) {
     return { ok: false, reason: "invalid_length", original };
   }
   return { ok: true, e164: `+${digits}`, original };
+}
+
+function normalizeSaleValue(raw) {
+  if (raw == null || String(raw).trim() === "") return { ok: true, value: null };
+  const value = Number(String(raw).trim().replace(",", "."));
+  return Number.isFinite(value) && value >= 0
+    ? { ok: true, value }
+    : { ok: false, value: null };
 }
 
 function normalizePotential(value) {
@@ -238,13 +245,8 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
       const routed = routeLead(body);
       return { destination: routed.user, reason: routed.reason };
     },
-    authenticateUser: async (body) => {
-      const email = String(body.email || body.login || "").trim().toLowerCase();
-      const password = String(body.password || "");
-      if (!email || password !== DEFAULT_EMPLOYEE_PASSWORD) return { error: "invalid_credentials" };
-      const user = db.users.find((item) => String(item.email || "").toLowerCase() === email || `${String(item.login || "").toLowerCase()}@grupoabr.com.br` === email);
-      if (!user) return { error: "invalid_credentials" };
-      return { user };
+    authenticateUser: async () => {
+      return { error: "invalid_credentials" };
     },
     listSellers: async () => ({ items: db.sellers, total: db.sellers.length }),
     createSeller: async (body) => {
@@ -269,6 +271,8 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
     createCase: async (body) => {
       const phone = normalizePhone(body.phone || "");
       if (!phone.ok) return { error: "invalid_phone", detail: phone.reason };
+      const saleValue = normalizeSaleValue(body.saleValue);
+      if (!saleValue.ok) return { error: "invalid_sale_value" };
       const routed = routeLead(body);
       const publicProtocol = protocol();
       const link = handoffLink(routed.user.phone, publicProtocol);
@@ -289,6 +293,7 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
           stage: body.stage || "Novo Lead",
           potential: body.potential || null,
           temperature: body.temperature || null,
+          saleValue: saleValue.value,
           source: body.source || null
         },
         owner: routed.user,
@@ -317,7 +322,34 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
       };
       db.cases.unshift(crmCase);
       db.handoffs.unshift(handoff);
+      if (body.nextTask) {
+        db.tasks ||= [];
+        db.tasks.unshift({ id: randomUUID(), case_id: crmCase.id, title: String(body.nextTask).slice(0, 200), status: "open", created_at: createdAt });
+      }
       return { case: crmCase, handoff };
+    },
+    updateCase: async (caseId, body) => {
+      const found = db.cases.find((item) => item.id === caseId);
+      if (!found) return { error: "case_not_found" };
+      const phone = normalizePhone(body.phone || "");
+      if (!phone.ok) return { error: "invalid_phone", detail: phone.reason };
+      const saleValue = normalizeSaleValue(body.saleValue);
+      if (!saleValue.ok) return { error: "invalid_sale_value" };
+      found.contact.name = String(body.name || "").trim() || null;
+      found.contact.phone = phone.e164;
+      found.contact.original_phone = phone.original;
+      found.fields.company = body.company || null;
+      found.fields.city = body.city || null;
+      found.fields.uf = body.uf || null;
+      found.fields.segment = body.segment || null;
+      found.fields.department = body.department || found.fields.department;
+      found.fields.source = body.source || null;
+      found.fields.need = body.need || null;
+      found.fields.potential = body.potential || null;
+      found.fields.temperature = body.temperature || null;
+      found.fields.saleValue = saleValue.value;
+      found.updated_at = new Date().toISOString();
+      return { case: found };
     },
     listCases: async () => ({ items: db.cases, total: db.cases.length }),
     listFunnels: async () => ({ items: memoryFunnels() }),
@@ -405,10 +437,30 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
       command.updated_at = new Date().toISOString();
       return { command };
     },
-    kpis: async () => ({
-      totals: { cases: db.cases.length, handoffs: db.handoffs.length, openTasks: (db.tasks || []).filter((t) => t.status === "open").length },
-      byStatus: Object.entries(db.cases.reduce((acc, c) => (acc[c.status] = (acc[c.status] || 0) + 1, acc), {})).map(([status, count]) => ({ status, count }))
-    }),
+    kpis: async (pipelineId) => {
+      const funnel = pipelineId ? memoryFunnels().find((item) => item.id === pipelineId || item.name.toLowerCase() === String(pipelineId).toLowerCase()) : null;
+      const cases = funnel ? db.cases.filter((item) => String(item.fields.pipeline || "").toLowerCase() === funnel.name.toLowerCase()) : db.cases;
+      const caseIds = new Set(cases.map((item) => item.id));
+      const handoffs = db.handoffs.filter((item) => caseIds.has(item.case_id));
+      const tasks = (db.tasks || []).filter((item) => caseIds.has(item.case_id));
+      const byStatus = Object.entries(cases.reduce((acc, item) => (acc[item.status] = (acc[item.status] || 0) + 1, acc), {})).map(([status, count]) => ({ status, count }));
+      const won = cases.filter((item) => item.fields.stage === "Venda ganha").length;
+      const lost = cases.filter((item) => item.fields.stage === "Venda perdida").length;
+      return {
+        funnel: funnel ? { id: funnel.id, name: funnel.name } : null,
+        totals: {
+          cases: cases.length,
+          closed: cases.filter((item) => item.status === "closed").length,
+          won,
+          lost,
+          sale_value: cases.reduce((sum, item) => sum + Number(item.fields.saleValue || 0), 0)
+        },
+        handoffs: { total: handoffs.length, claimed: handoffs.filter((item) => item.state === "claimed").length },
+        tasks: { open: tasks.filter((item) => item.status === "open").length, overdue: 0 },
+        byStatus,
+        byPipeline: funnel ? [{ pipeline: funnel.name, count: cases.length }] : []
+      };
+    },
     exportCasesCsv: async () => {
       const header = ["id", "protocol", "status", "name", "phone", "city", "uf", "segment", "pipeline", "stage", "owner", "created_at"];
       const rows = db.cases.map((c) => [c.id, c.protocol, c.status, c.contact.name, c.contact.phone, c.fields.city, c.fields.uf, c.fields.segment, c.fields.pipeline, c.fields.stage, c.owner?.name, c.created_at]);
@@ -644,6 +696,7 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
         stage: row.stage_name,
         potential: row.potential,
         temperature: row.temperature,
+        saleValue: row.sale_value,
         source: row.source_name
       },
       owner: row.owner_user_id ? { id: row.owner_user_id, name: row.owner_name, phone: row.owner_phone, department: row.department_name } : null,
@@ -678,12 +731,18 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
   const caseSelect = `
     select c.id, h.protocol, c.status, co.display_name contact_name, ci.e164 contact_phone, ci.original original_phone,
       c.company_name, c.city, c.uf, s.label segment_label, c.need, d.name department_name,
-      p.name pipeline_name, ps.name stage_name, c.potential, c.temperature, src.name source_name,
+      p.name pipeline_name, ps.name stage_name, c.potential, c.temperature, c.sale_value, src.name source_name,
       c.owner_user_id, u.display_name owner_name, coalesce(wa.e164, hwa.e164) owner_phone, ca.reason routing_reason,
       c.created_at::text, c.updated_at::text
     from cases c
     join contacts co on co.id=c.contact_id
-    left join contact_identifiers ci on ci.contact_id=co.id and ci.kind='phone'
+    left join lateral (
+      select e164, original
+      from contact_identifiers
+      where organization_id=co.organization_id and contact_id=co.id and kind='phone'
+      order by (source='mvp_panel') desc, reliable desc, id
+      limit 1
+    ) ci on true
     left join handoffs h on h.case_id=c.id
     left join segments s on s.id=c.segment_id
     left join departments d on d.id=c.department_id
@@ -733,17 +792,20 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       };
     },
     authenticateUser: async (body) => {
-      const loginOrEmail = String(body.email || body.login || "").trim().toLowerCase();
+      const ctx = await ready();
+      const loginOrEmail = String(body.email || body.login || "").trim().toLowerCase().slice(0, 254);
       const email = loginOrEmail.includes("@") ? loginOrEmail : `${loginOrEmail}@grupoabr.com.br`;
       const password = String(body.password || "");
+      if (!loginOrEmail || !password || password.length > 256) return { error: "invalid_credentials" };
       const user = await one(`
         select id, email, display_name as name, role, status
         from users
-        where lower(email)=lower($1)
+        where organization_id=$1
+          and lower(email)=lower($2)
           and status='active'
-          and password_hash = crypt($2, password_hash)
+          and password_hash = crypt($3, password_hash)
         limit 1
-      `, [email, password]);
+      `, [ctx.org.id, email, password]);
       if (!user) return { error: "invalid_credentials" };
       return { user };
     },
@@ -842,6 +904,8 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       const ctx = await ready();
       const phone = normalizePhone(body.phone || "");
       if (!phone.ok) return { error: "invalid_phone", detail: phone.reason };
+      const saleValue = normalizeSaleValue(body.saleValue);
+      if (!saleValue.ok) return { error: "invalid_sale_value" };
       const contactName = String(body.name || "").trim() || null;
       const routed = await ensureManualDestination(ctx, body);
       const segment = await findSegment(ctx.org.id, body.segment);
@@ -854,8 +918,8 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       try {
         await client.query("begin");
         const crm = await client.query(
-          `insert into cases(organization_id,contact_id,status,department_id,owner_user_id,company_name,city,uf,segment_id,source_id,pipeline_id,stage_id,potential,temperature,need,triage_summary)
-           values($1,$2,'awaiting_arrival',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) returning id`,
+          `insert into cases(organization_id,contact_id,status,department_id,owner_user_id,company_name,city,uf,segment_id,source_id,pipeline_id,stage_id,potential,temperature,need,triage_summary,sale_value)
+           values($1,$2,'awaiting_arrival',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) returning id`,
           [
             ctx.org.id,
             contact.id,
@@ -871,7 +935,8 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
             normalizePotential(body.potential),
             normalizeTemperature(body.temperature),
             body.need || null,
-            body.need ? String(body.need).slice(0, 1000) : null
+            body.need ? String(body.need).slice(0, 1000) : null,
+            saleValue.value
           ]
         );
         const caseId = crm.rows[0].id;
@@ -885,6 +950,12 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
           "insert into case_assignments(case_id,user_id,inputs,reason) values($1,$2,$3,$4)",
           [caseId, routed.user.id, JSON.stringify({ mvp: true }), routed.reason]
         );
+        if (body.nextTask) {
+          await client.query(
+            "insert into tasks(organization_id,case_id,assignee_user_id,title) values($1,$2,$3,$4)",
+            [ctx.org.id, caseId, routed.user.id, String(body.nextTask).slice(0, 200)]
+          );
+        }
         await client.query("commit");
         const fullCase = shapeCase(await one(`${caseSelect} where c.id=$1 order by h.created_at desc limit 1`, [caseId]));
         const fullHandoff = shapeHandoff((await many(`
@@ -909,6 +980,69 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       } finally {
         client.release();
       }
+    },
+    updateCase: async (caseId, body) => {
+      const ctx = await ready();
+      const phone = normalizePhone(body.phone || "");
+      if (!phone.ok) return { error: "invalid_phone", detail: phone.reason };
+      const saleValue = normalizeSaleValue(body.saleValue);
+      if (!saleValue.ok) return { error: "invalid_sale_value" };
+      const current = await one("select c.id, c.contact_id from cases c where c.organization_id=$1 and c.id=$2", [ctx.org.id, caseId]);
+      if (!current) return { error: "case_not_found" };
+      const segment = await findSegment(ctx.org.id, body.segment);
+      const source = body.source ? await one("select id from acquisition_sources where organization_id=$1 and lower(name)=lower($2) limit 1", [ctx.org.id, body.source]) : null;
+      const department = body.department ? await ensureDepartment(ctx.org.id, body.department) : null;
+      const client = await pool.connect();
+      try {
+        await client.query("begin");
+        await client.query(`
+          insert into contact_identifiers(organization_id,contact_id,kind,e164,original,source,reliable)
+          values($1,$2,'phone',$3,$4,'mvp_panel',true)
+          on conflict (organization_id,contact_id,e164) do update
+            set original=excluded.original, source='mvp_panel', reliable=true
+        `, [ctx.org.id, current.contact_id, phone.e164, phone.original]);
+        await client.query("update contacts set display_name=$2 where id=$1", [current.contact_id, String(body.name || "").trim() || null]);
+        const result = await client.query(`
+          update cases
+          set department_id=coalesce($3, department_id),
+              company_name=$4,
+              city=$5,
+              uf=$6,
+              segment_id=$7,
+              source_id=$8,
+              potential=$9,
+              temperature=$10,
+              need=$11,
+              sale_value=$12,
+              updated_at=now()
+          where organization_id=$1 and id=$2
+        `, [
+          ctx.org.id,
+          caseId,
+          department?.id || null,
+          body.company || null,
+          body.city || null,
+          body.uf || null,
+          segment?.id || null,
+          source?.id || null,
+          normalizePotential(body.potential),
+          normalizeTemperature(body.temperature),
+          body.need ? String(body.need).slice(0, 1000) : null,
+          saleValue.value
+        ]);
+        if (!result.rowCount) {
+          await client.query("rollback");
+          return { error: "case_not_found" };
+        }
+        await client.query("commit");
+      } catch (err) {
+        await client.query("rollback").catch(() => {});
+        throw err;
+      } finally {
+        client.release();
+      }
+      const crmCase = shapeCase(await one(`${caseSelect} where c.id=$1 order by h.created_at desc limit 1`, [caseId]));
+      return { case: crmCase };
     },
     listCases: async () => {
       await ready();
@@ -1092,8 +1226,16 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       }
       return { command };
     },
-    kpis: async () => {
+    kpis: async (pipelineId) => {
       const ctx = await ready();
+      const funnel = pipelineId
+        ? await one("select id, name from pipelines where organization_id=$1 and (id::text=$2 or lower(name)=lower($2)) limit 1", [ctx.org.id, pipelineId])
+        : null;
+      if (pipelineId && !funnel) {
+        return { funnel: null, totals: { cases: 0, closed: 0, won: 0, lost: 0, sale_value: 0 }, handoffs: { total: 0, claimed: 0 }, tasks: { open: 0, overdue: 0 }, byStatus: [], byPipeline: [] };
+      }
+      const caseFilter = funnel ? " and pipeline_id=$2" : "";
+      const caseParams = funnel ? [ctx.org.id, funnel.id] : [ctx.org.id];
       const totals = await one(`
         select
           count(*)::int cases,
@@ -1101,20 +1243,27 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
           count(*) filter (where won_at is not null)::int won,
           count(*) filter (where lost_at is not null)::int lost,
           coalesce(sum(sale_value),0)::numeric sale_value
-        from cases where organization_id=$1
-      `, [ctx.org.id]);
-      const byStatus = await many("select status, count(*)::int count from cases where organization_id=$1 group by status order by status", [ctx.org.id]);
-      const byPipeline = await many(`
+        from cases where organization_id=$1${caseFilter}
+      `, caseParams);
+      const byStatus = await many(`select status, count(*)::int count from cases where organization_id=$1${caseFilter} group by status order by status`, caseParams);
+      const byPipeline = funnel ? [{ pipeline: funnel.name, count: totals.cases }] : await many(`
         select coalesce(p.name,'Sem funil') pipeline, count(c.id)::int count
         from cases c left join pipelines p on p.id=c.pipeline_id
         where c.organization_id=$1 group by p.name order by count desc
       `, [ctx.org.id]);
+      const handoffFilter = funnel ? " and c.pipeline_id=$2" : "";
+      const handoffParams = funnel ? [ctx.org.id, funnel.id] : [ctx.org.id];
       const handoffs = await one(`
         select count(*)::int total, count(*) filter (where exists (select 1 from handoff_events he where he.handoff_id=h.id and he.type='claimed'))::int claimed
-        from handoffs h where h.organization_id=$1
-      `, [ctx.org.id]);
-      const tasks = await one("select count(*) filter (where status='open')::int open, count(*) filter (where status='open' and due_at < now())::int overdue from tasks where organization_id=$1", [ctx.org.id]);
-      return { totals, handoffs, tasks, byStatus, byPipeline };
+        from handoffs h join cases c on c.id=h.case_id where h.organization_id=$1${handoffFilter}
+      `, handoffParams);
+      const tasks = await one(`
+        select count(*) filter (where t.status='open')::int open,
+               count(*) filter (where t.status='open' and t.due_at < now())::int overdue
+        from tasks t join cases c on c.id=t.case_id
+        where t.organization_id=$1${funnel ? " and c.pipeline_id=$2" : ""}
+      `, caseParams);
+      return { funnel: funnel ? { id: funnel.id, name: funnel.name } : null, totals, handoffs, tasks, byStatus, byPipeline };
     },
     exportCasesCsv: async () => {
       await ready();

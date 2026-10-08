@@ -12,7 +12,7 @@ const PORT = Number(process.env.PORT || 10000);
 const ADMIN_ORIGIN = process.env.ADMIN_ORIGIN || "http://localhost:5173";
 const ALLOWED_EXTENSION_IDS = (process.env.ALLOWED_EXTENSION_IDS || "").split(",").map((s) => s.trim()).filter(Boolean);
 const API_ADMIN_TOKEN = process.env.API_ADMIN_TOKEN || "";
-const AUTH_SIGNING_SECRET = process.env.AUTH_SIGNING_SECRET || API_ADMIN_TOKEN || "dev-secret-change-me";
+const AUTH_SIGNING_SECRET = process.env.AUTH_SIGNING_SECRET || cryptoRandomBytes(32).toString("hex");
 const GROQ_BASE_URL = process.env.GROQ_BASE_URL || "https://api.groq.com/openai/v1";
 const STARTED_AT = new Date().toISOString();
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -46,7 +46,7 @@ function send(res, status, body, headers = {}) {
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
     "access-control-allow-origin": "*",
-    "access-control-allow-methods": "GET,POST,OPTIONS",
+    "access-control-allow-methods": "GET,POST,PATCH,OPTIONS",
     "access-control-allow-headers": "authorization,content-type,x-abr-device-id,x-abr-extension-id,x-api-admin-token",
     ...headers
   });
@@ -57,7 +57,7 @@ function sendText(res, status, body, contentType, headers = {}) {
   res.writeHead(status, {
     "content-type": contentType,
     "access-control-allow-origin": "*",
-    "access-control-allow-methods": "GET,POST,OPTIONS",
+    "access-control-allow-methods": "GET,POST,PATCH,OPTIONS",
     "access-control-allow-headers": "authorization,content-type,x-abr-device-id,x-abr-extension-id,x-api-admin-token",
     ...headers
   });
@@ -100,6 +100,7 @@ function b64url(input) {
 }
 
 function sign(input) {
+  if (!AUTH_SIGNING_SECRET) throw new Error("auth_signing_secret_unavailable");
   return createHmac("sha256", AUTH_SIGNING_SECRET).update(input).digest("base64url");
 }
 
@@ -226,18 +227,37 @@ async function handler(req, res) {
       return sendFile(res, 200, resolve(publicDir, "crm.html"), "text/html; charset=utf-8");
     }
 
+    if (req.method === "POST" && url.pathname === "/v1/auth/login") {
+      const body = await readBody(req);
+      if (!body || typeof body !== "object" || Array.isArray(body)) return send(res, 401, { error: "invalid_credentials" });
+      await storage.ready();
+      const result = await storage.authenticateUser(body);
+      if (result.error) return send(res, 401, result);
+      return send(res, 200, { token: issueToken(result.user), user: result.user });
+    }
+
+    if (url.pathname.startsWith("/v1/") && url.pathname !== "/v1/auth/login") {
+      if (!requireRoles(req, res, ["admin", "supervisor", "sdr", "seller", "department_staff"])) return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/v1/auth/me") {
+      return send(res, 200, { user: userFromRequest(req) });
+    }
+
     if (req.method === "GET" && url.pathname === "/v1/bootstrap") {
       await storage.ready();
       return send(res, 200, await storage.bootstrap());
     }
 
     if (req.method === "POST" && url.pathname === "/v1/ai/test") {
+      if (!requireRoles(req, res, ["admin"])) return;
       if (!requireAdmin(req, res)) return;
       const body = await readBody(req);
       return send(res, 200, await runGroqSmokeTest(body));
     }
 
     if (req.method === "POST" && url.pathname === "/v1/tests/transfer") {
+      if (!requireRoles(req, res, ["admin"])) return;
       if (!requireAdmin(req, res)) return;
       const body = await readBody(req);
       await storage.ready();
@@ -282,6 +302,7 @@ async function handler(req, res) {
     }
 
     if (req.method === "POST" && url.pathname === "/v1/sellers") {
+      if (!requireRoles(req, res, ["admin", "supervisor"])) return;
       const body = await readBody(req);
       await storage.ready();
       const result = await storage.createSeller(body);
@@ -291,6 +312,7 @@ async function handler(req, res) {
 
     const sellerDelete = /^\/v1\/sellers\/([^/]+)$/.exec(url.pathname);
     if (req.method === "DELETE" && sellerDelete) {
+      if (!requireRoles(req, res, ["admin", "supervisor"])) return;
       await storage.ready();
       const result = await storage.deactivateSeller(decodeURIComponent(sellerDelete[1]));
       if (result.error === "seller_not_found") return send(res, 404, result);
@@ -302,7 +324,18 @@ async function handler(req, res) {
       await storage.ready();
       const result = await storage.createCase(body);
       if (result.error === "invalid_phone") return send(res, 422, result);
+      if (result.error === "invalid_sale_value") return send(res, 422, result);
       return send(res, 201, result);
+    }
+
+    const updateCase = /^\/v1\/cases\/([^/]+)$/.exec(url.pathname);
+    if (req.method === "PATCH" && updateCase) {
+      const body = await readBody(req);
+      await storage.ready();
+      const result = await storage.updateCase(decodeURIComponent(updateCase[1]), body);
+      if (result.error === "case_not_found") return send(res, 404, result);
+      if (result.error === "invalid_phone" || result.error === "invalid_sale_value") return send(res, 422, result);
+      return send(res, 200, result);
     }
 
     if (req.method === "GET" && url.pathname === "/v1/cases") {
@@ -312,7 +345,7 @@ async function handler(req, res) {
 
     if (req.method === "GET" && url.pathname === "/v1/reports/kpis") {
       await storage.ready();
-      return send(res, 200, await storage.kpis());
+      return send(res, 200, await storage.kpis(url.searchParams.get("pipeline_id")));
     }
 
     if (req.method === "GET" && url.pathname === "/v1/reports/cases.csv") {

@@ -4,6 +4,7 @@
   if (document.getElementById('abr-crm-host')) return;
 
   var STORE_KEY = 'abrCrmMvpConfig';
+  var AUTH_KEY = 'abrCrmSession';
   var DEFAULT_API = 'https://abr-crm-api.onrender.com';
   var OPTION_FIELDS = [
     { key: 'sourceOptions', settingsId: 'cfgSourceOptions', defaultId: 'cfgDefaultSource', formId: 'source', values: ['Não informado', 'Instagram', 'Facebook', 'LinkedIn', 'Google', 'Feiras/Eventos'], fallback: 'Não informado' },
@@ -24,6 +25,9 @@
   var crmCases = [];
   var activeCaseId = '';
   var activePipelineId = '';
+  var authToken = '';
+  var authOrigin = '';
+  var authRevision = 0;
   var mem = {};
   var store = (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) ? chrome.storage.local : null;
 
@@ -45,6 +49,9 @@
   function $(id) { return sh.getElementById(id); }
   function value(id) { return ($(id).value || '').trim(); }
   function apiBase() { return (value('api') || DEFAULT_API).replace(/\/+$/, ''); }
+  function apiOrigin() {
+    try { return new URL(apiBase()).origin; } catch (_) { return ''; }
+  }
   function say(msg, kind) {
     $('status').textContent = msg;
     $('status').className = 'status ' + (kind || '');
@@ -52,10 +59,19 @@
   function request(path, opts) {
     var headers = { 'content-type': 'application/json' };
     if (value('device')) headers['x-abr-device-id'] = value('device');
-    return fetch(apiBase() + path, Object.assign({ headers: headers }, opts || {})).then(function (res) {
+    var requestOptions = Object.assign({}, opts || {});
+    requestOptions.headers = Object.assign(headers, requestOptions.headers || {});
+    var origin = apiOrigin();
+    if (authToken && authOrigin === origin && path !== '/v1/auth/login') {
+      requestOptions.headers.authorization = 'Bearer ' + authToken;
+    }
+    var requestToken = authToken;
+    return fetch(apiBase() + path, requestOptions).then(function (res) {
       return res.text().then(function (txt) {
+        if (requestToken !== authToken) throw new Error('session_changed');
         var data = txt ? JSON.parse(txt) : null;
         if (!res.ok) {
+          if (res.status === 401 && authToken && path !== '/v1/auth/login') clearSession(true);
           var err = new Error((data && data.error) || res.statusText);
           err.data = data;
           throw err;
@@ -112,6 +128,66 @@
     option.textContent = labelText;
     select.appendChild(option);
   }
+  function setFormSelect(id, selected) {
+    var select = $(id);
+    var normalized = String(selected || '');
+    var values = { low: 'Baixo', medium: 'Medio', high: 'Alto', key_account: 'Conta-chave', hot: 'Quente', warm: 'Morno', cold: 'Frio' };
+    if (values[normalized]) normalized = values[normalized];
+    if (normalized && !Array.prototype.some.call(select.options, function (option) { return option.value === normalized; })) {
+      appendOption(select, normalized, normalized);
+    }
+    select.value = normalized;
+  }
+  function setCaseForm(crmCase) {
+    var fields = crmCase && crmCase.fields || {};
+    var defaults = {
+      source: value('cfgDefaultSource'), segment: value('cfgDefaultSegment'),
+      department: value('cfgDefaultDepartment'), potential: value('cfgDefaultPotential'),
+      temperature: value('cfgDefaultTemperature')
+    };
+    $('name').value = crmCase && crmCase.contact && crmCase.contact.name || '';
+    $('phone').value = crmCase && crmCase.contact && crmCase.contact.phone || '';
+    $('company').value = fields.company || '';
+    $('city').value = fields.city || '';
+    $('uf').value = fields.uf || '';
+    $('need').value = fields.need || '';
+    $('saleValue').value = crmCase
+      ? (fields.saleValue == null ? '' : String(fields.saleValue))
+      : value('cfgDefaultSaleValue');
+    ['source', 'segment', 'department', 'potential', 'temperature'].forEach(function (id) {
+      setFormSelect(id, crmCase ? fields[id] || '' : defaults[id] || '');
+    });
+    $('responsibleName').value = crmCase && crmCase.owner && crmCase.owner.name || value('cfgDefaultResponsibleName') || 'Vendedor ABR';
+    $('responsiblePhone').value = crmCase && crmCase.owner && crmCase.owner.phone || value('cfgDefaultResponsiblePhone');
+    $('nextTask').value = crmCase ? '' : value('cfgDefaultNextTask');
+    var editing = !!(crmCase && crmCase.id);
+    $('createCase').textContent = editing ? 'Salvar alterações' : 'Criar ficha + link';
+    $('responsibleName').disabled = editing;
+    $('responsiblePhone').disabled = editing;
+    $('nextTask').disabled = editing;
+    $('responsibleName').title = editing ? 'Para trocar o responsável, faça uma transferência.' : '';
+    $('responsiblePhone').title = editing ? 'Para trocar o responsável, faça uma transferência.' : '';
+    $('nextTask').title = editing ? 'Para não criar tarefas duplicadas, cadastre novas tarefas pela área de tarefas.' : '';
+    updateQualification();
+  }
+  function caseFormPayload() {
+    return {
+      name: value('name'), phone: value('phone'), company: value('company'),
+      city: value('city'), uf: value('uf').toUpperCase(), source: value('source'),
+      segment: value('segment'), department: value('department'),
+      pipeline: value('cfgDefaultPipeline'), stage: value('cfgDefaultStage'),
+      potential: value('potential'), temperature: value('temperature'),
+      need: value('need'), nextTask: value('nextTask'), saleValue: value('saleValue'),
+      responsibleName: value('responsibleName'), responsiblePhone: value('responsiblePhone')
+    };
+  }
+  function startNewCase() {
+    activeCaseId = '';
+    $('activeCase').value = '';
+    setCaseForm(null);
+    renderPipelineTracker();
+    say('Preencha os dados e crie uma nova ficha.', 'ok');
+  }
   function renderPipelineTracker() {
     var pipelineSelect = $('activePipeline');
     var stageSelect = $('activeStage');
@@ -164,11 +240,14 @@
     renderPipelineTracker();
   }
   function loadCrmData(preferredCaseId) {
+    var revision = authRevision;
+    if (!authToken) return Promise.reject(new Error('unauthorized'));
     return Promise.all([request('/v1/funnels'), request('/v1/cases')]).then(function (results) {
+      if (!authToken || revision !== authRevision) throw new Error('session_changed');
       crmFunnels = (results[0].items || []).filter(function (funnel) { return (funnel.stages || []).length > 0; });
       crmCases = results[1].items || [];
       if (preferredCaseId && crmCases.some(function (item) { return item.id === preferredCaseId; })) activeCaseId = preferredCaseId;
-      else if (!crmCases.some(function (item) { return item.id === activeCaseId; })) activeCaseId = crmCases[0] ? crmCases[0].id : '';
+      else if (!crmCases.some(function (item) { return item.id === activeCaseId; })) activeCaseId = '';
       var selectedCase = crmCases.find(function (item) { return item.id === activeCaseId; });
       var selectedFunnel = funnelForCase(selectedCase);
       activePipelineId = selectedFunnel ? selectedFunnel.id : (crmFunnels[0] && crmFunnels[0].id) || '';
@@ -241,7 +320,7 @@
     '<div class="view" id="dest"><div class="section"><h3>Fila do responsavel</h3><label>Telefone destino</label><input id="destinationPhone" placeholder="+5511999990001"><div class="actions"><button id="pending">Buscar pendentes</button><button class="secondary" id="refreshPend">Atualizar</button></div><div id="handoffs"></div></div></div>' +
     '<div class="view" id="tasks"><div class="section"><h3>Notas e tarefas</h3><label>Nota interna</label><textarea id="note" placeholder="Nao vai para o WhatsApp"></textarea><label>Tarefa</label><input id="task" placeholder="Ex.: ligar amanha as 9h"><div class="actions"><button class="secondary" id="holdAi">Pausar IA</button><button class="secondary" id="resumeAi">Retomar triagem</button><button class="ghost" id="finish">Concluir</button></div><div class="hint">MVP local: notas e tarefas ficam no painel ate a proxima recarga.</div></div></div>' +
     '<div class="view" id="cfg">' +
-      '<div class="section"><h3>Conexão e dispositivo</h3><label>Endereço da API</label><input id="api" value="' + DEFAULT_API + '" placeholder="https://seu-crm.onrender.com"><div class="grid"><div><label>Perfil deste dispositivo</label><select id="mode"><option value="main">Atendimento principal</option><option value="destination">Atendimento de destino</option></select></div><div><label>Telefone WhatsApp deste dispositivo</label><input id="localPhone" placeholder="+5511999990000"></div></div><label>Identificador do dispositivo</label><input id="device" readonly><div class="hint">O ID é gerado e registrado pela API; não precisa ser preenchido manualmente.</div><div class="actions"><button id="health">Testar conexão</button><button class="secondary" id="register">Registrar dispositivo</button></div></div>' +
+      '<div class="section"><h3>Conexão e dispositivo</h3><label>Endereço da API</label><input id="api" value="' + DEFAULT_API + '" placeholder="https://seu-crm.onrender.com"><div class="grid"><div><label>Perfil deste dispositivo</label><select id="mode"><option value="main">Atendimento principal</option><option value="destination">Atendimento de destino</option></select></div><div><label>Telefone WhatsApp deste dispositivo</label><input id="localPhone" placeholder="+5511999990000"></div></div><label>Identificador do dispositivo</label><input id="device" readonly><div class="hint">O ID é gerado e registrado pela API; não precisa ser preenchido manualmente.</div><div class="actions"><button id="health">Testar conexão</button><button class="secondary" id="register">Registrar dispositivo</button><button class="ghost" id="signOut">Encerrar sessão</button></div></div>' +
       '<div class="section"><h3>Preenchimento padrão da ficha</h3><div class="grid"><div><label>Responsável</label><input id="cfgDefaultResponsibleName" placeholder="Vendedor ABR"></div><div><label>WhatsApp do responsável</label><input id="cfgDefaultResponsiblePhone" placeholder="+5511999990001"></div><div class="full"><label>Próxima tarefa sugerida</label><input id="cfgDefaultNextTask" placeholder="Ex.: retornar para cotação"></div><div class="full"><label>Valor estimado padrão (opcional)</label><input id="cfgDefaultSaleValue" placeholder="Deixe vazio se não houver um valor padrão"></div></div>' +
       '<div class="grid">' +
       '<div><label>Origem padrão</label><select id="cfgDefaultSource"></select></div><div><label>Segmento padrão</label><select id="cfgDefaultSegment"></select></div>' +
@@ -258,7 +337,7 @@
       '<label>Potenciais</label><textarea id="cfgPotentialOptions" class="configOptions"></textarea>' +
       '<label>Temperaturas</label><textarea id="cfgTemperatureOptions" class="configOptions"></textarea>' +
       '<div class="actions"><button class="secondary" id="save">Salvar todas as configurações</button><button class="ghost" id="resetConfig">Restaurar padrões</button></div></div></div>' +
-    '<div class="view" id="diag"><div class="section"><h3>Diagnostico</h3><label>Cenario</label><select id="scenario"><option value="mvp-chat-aberto">chat aberto</option><option value="mvp-sem-conversa">sem conversa aberta</option><option value="mvp-observacao">janela de observacao</option></select><div class="actions"><button id="snapshot">Enviar snapshot</button><button class="secondary" id="observe">Observar 15s</button></div></div></div>' +
+    '<div class="view" id="diag"><div class="section"><h3>Leitura observacional</h3><p class="muted">Coleta estrutura e contagens anonimizadas do WhatsApp. O relatório é enviado à API CRM; não coleta o texto das mensagens nem envia mensagens.</p><label>Cenario</label><select id="scenario"><option value="mvp-chat-aberto">chat aberto</option><option value="mvp-sem-conversa">sem conversa aberta</option><option value="mvp-observacao">janela de observacao</option></select><div class="actions"><button id="snapshot">Capturar estrutura</button><button class="secondary" id="observe">Observar 15s</button></div></div></div>' +
     '<textarea id="out" readonly></textarea></div></div></section>' +
     '<nav class="rail" aria-label="Navegação do CRM"><div class="brand" title="Grupo ABR"><span class="brandFallback">ABR</span><img src="' + chrome.runtime.getURL('brand-logo.png') + '" alt=""></div>' +
     '<button class="railBtn active" data-tab="case" title="Ficha do lead" aria-label="Ficha do lead" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3.5" width="16" height="17" rx="2"/><circle cx="12" cy="9" r="2.5"/><path d="M8 16.5a4 4 0 0 1 8 0"/></svg></button>' +
@@ -268,13 +347,56 @@
     '<button class="railBtn" data-tab="cfg" title="Conexão" aria-label="Conexão" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5v.2h-2.6v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8.1-.1A1.7 1.7 0 0 0 8 15a1.7 1.7 0 0 0-1.5-1H6.3v-2.6h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.8-1.8.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5v-.2H15v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.8 1.8-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.2V14h-.2a1.7 1.7 0 0 0-1.5 1Z"/></svg></button>' +
     '<button class="railBtn" data-tab="diag" title="Diagnóstico" aria-label="Diagnóstico" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg></button>' +
     '<div class="spacer"></div><div class="miniLogo" title="Grupo ABR">ABR</div></nav></div>';
-  sh.querySelector('style').textContent += '.brand{position:relative;overflow:hidden}.brandFallback{position:absolute}.brand img{position:relative;z-index:1;width:100%;height:100%;display:block;object-fit:cover;border-radius:9px}.pipelineControls{display:grid;grid-template-columns:1fr 1fr;gap:8px}.pipelineControls>div{min-width:0}.pipelineControls label{margin-top:10px}.pipelineControls select{font-size:12px;min-height:39px}.pipe{grid-template-columns:repeat(auto-fit,minmax(24px,1fr));gap:5px}.pipe .step{height:6px;background:#dfe4eb}.pipe .step.entered{background:#536578}.pipe .step.current{background:#ed8922;box-shadow:0 0 0 2px #ed892226}.stepLabel{min-height:30px}.caseRefresh{margin-top:9px}@media(max-width:420px){.pipelineControls{grid-template-columns:1fr}}';
+  sh.querySelector('style').textContent += '.brand{position:relative;overflow:hidden;background:#263878}.brandFallback{position:absolute}.brand img{position:relative;z-index:1;width:100%;height:100%;display:block;object-fit:contain;border-radius:0;background:#263878}.pipelineControls{display:grid;grid-template-columns:1fr 1fr;gap:8px}.pipelineControls>div{min-width:0}.pipelineControls label{margin-top:10px}.pipelineControls select{font-size:12px;min-height:39px}.pipe{grid-template-columns:repeat(auto-fit,minmax(24px,1fr));gap:5px}.pipe .step{height:6px;background:#dfe4eb}.pipe .step.entered{background:#536578}.pipe .step.current{background:#ed8922;box-shadow:0 0 0 2px #ed892226}.stepLabel{min-height:30px}.caseRefresh{margin-top:9px}@media(max-width:420px){.pipelineControls{grid-template-columns:1fr}}';
   ['pipeline', 'stage'].forEach(function (id) {
     var field = $(id);
     if (field && field.parentElement) field.parentElement.remove();
   });
   document.documentElement.appendChild(host);
   sh.querySelector('.brand img').addEventListener('error', function () { this.style.display = 'none'; });
+  sh.querySelector('style').textContent +=
+    '[hidden]{display:none!important}.loginGate{position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;padding:24px;background:rgba(10,20,37,.78);backdrop-filter:blur(8px);pointer-events:auto}.loginCard{width:min(360px,100%);padding:26px;border:1px solid #e5eaf1;border-radius:18px;background:#fff;box-shadow:0 24px 70px #09132466;color:#19263b}.loginCard h2{margin:0;font-size:21px;letter-spacing:-.04em}.loginCard p{margin:7px 0 19px;color:#758398;font-size:12px;line-height:1.55}.loginCard label{display:block;margin:12px 0 6px;color:#52627a;font-size:11px;font-weight:650}.loginCard input{width:100%;height:42px;padding:0 11px;border:1px solid #dfe4eb;border-radius:9px;background:#fff;color:#19263b;font-size:13px}.loginCard button{width:100%;height:42px;margin-top:17px;border:0;border-radius:9px;background:#ed8922;color:#fff;font-size:13px;font-weight:700;cursor:pointer}.loginCard button:disabled{opacity:.65;cursor:wait}.loginError{min-height:18px;margin-top:9px;color:#b95048;font-size:11px}';
+  var loginGate = document.createElement('div');
+  loginGate.className = 'loginGate';
+  loginGate.innerHTML = '<form class="loginCard" id="loginForm"><h2>Entrar no CRM ABR</h2><p>Acesse com seu usuário corporativo. As fichas só serão carregadas após a autenticação.</p><label for="loginEmail">E-mail ou usuário</label><input id="loginEmail" name="username" autocomplete="username" required placeholder="nome.sobrenome ou e-mail"><label for="loginPassword">Senha</label><input id="loginPassword" name="password" type="password" autocomplete="current-password" required><button id="loginSubmit" type="submit">Entrar</button><div class="loginError" id="loginError" role="status" aria-live="polite"></div></form>';
+  sh.appendChild(loginGate);
+  $('loginForm').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var button = $('loginSubmit');
+    button.disabled = true;
+    $('loginError').textContent = '';
+    request('/v1/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email: value('loginEmail'), password: $('loginPassword').value })
+    }).then(function (session) {
+      authToken = session.token;
+      authOrigin = apiOrigin();
+      authRevision += 1;
+      var savedSession = { token: authToken, origin: authOrigin };
+      if (store) {
+        var record = {}; record[AUTH_KEY] = savedSession;
+        store.set(record);
+      }
+      $('loginPassword').value = '';
+      loginGate.hidden = true;
+      return loadCrmData(activeCaseId);
+    }).then(function () {
+      say('Sessão iniciada. Fichas carregadas com sua conta.', 'ok');
+    }).catch(function (err) {
+      clearSession(false);
+      $('loginError').textContent = err.message === 'invalid_credentials' ? 'Usuário ou senha inválidos.' : 'Não foi possível entrar: ' + err.message;
+      loginGate.hidden = false;
+    }).finally(function () {
+      button.disabled = false;
+    });
+  });
+  var newCaseButton = document.createElement('button');
+  newCaseButton.type = 'button';
+  newCaseButton.className = 'secondary';
+  newCaseButton.id = 'newCase';
+  newCaseButton.textContent = 'Nova ficha';
+  $('listCases').parentElement.insertBefore(newCaseButton, $('listCases'));
+  newCaseButton.onclick = startNewCase;
   function syncPageDock(open) {
     document.documentElement.classList.toggle('abr-crm-open', open);
   }
@@ -349,6 +471,7 @@
     var selectedCase = crmCases.find(function (item) { return item.id === activeCaseId; });
     var funnel = funnelForCase(selectedCase);
     activePipelineId = funnel ? funnel.id : (crmFunnels[0] && crmFunnels[0].id) || '';
+    setCaseForm(selectedCase);
     renderCaseOptions();
   };
   $('activePipeline').onchange = function () {
@@ -395,12 +518,51 @@
       $(field.formId).value = cfg[field.key] || field.fallback;
     });
     updateQualification();
-    loadCrmData(activeCaseId).catch(function (err) {
-      $('pipelineProgressLabel').textContent = 'Não foi possível carregar os funis do CRM.';
-      say('Falha ao carregar fichas e funis: ' + err.message, 'err');
+    if (store) store.get(AUTH_KEY, function (record) {
+      var session = record && record[AUTH_KEY];
+      if (!session || !session.token || !apiOrigin() || session.origin !== apiOrigin()) return;
+      authToken = session.token;
+      authOrigin = session.origin;
+      authRevision += 1;
+      request('/v1/auth/me').then(function () {
+        loginGate.hidden = true;
+        return loadCrmData(activeCaseId);
+      }).then(function () {
+        say('Sessão restaurada.', 'ok');
+      }).catch(function () {
+        clearSession(true);
+      });
     });
   });
 
+  function clearSession(showGate) {
+    authToken = '';
+    authOrigin = '';
+    authRevision += 1;
+    if (store && typeof store.remove === 'function') store.remove(AUTH_KEY);
+    crmCases = [];
+    crmFunnels = [];
+    activeCaseId = '';
+    activePipelineId = '';
+    setCaseForm(null);
+    renderCaseOptions();
+    $('handoffs').innerHTML = '<div class="empty">Entre novamente para carregar a fila.</div>';
+    $('railPendCount').textContent = '0';
+    $('out').value = '';
+    $('note').value = '';
+    $('task').value = '';
+    $('transferName').value = '';
+    $('transferPhone').value = '';
+    if (showGate) {
+      loginGate.hidden = false;
+      $('loginPassword').value = '';
+      $('loginEmail').focus();
+    }
+  }
+  $('signOut').onclick = function () {
+    clearSession(true);
+    say('Sessão encerrada.', 'warn');
+  };
   $('save').onclick = function () {
     load(function (previous) {
       var cfg = readOptionConfig(Object.assign({}, previous, {
@@ -469,40 +631,29 @@
     }).catch(function (err) { say('Falha ao registrar: ' + err.message, 'err'); });
   };
   $('createCase').onclick = function () {
-    say('Criando ficha...');
-    request('/v1/cases', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: value('name'),
-        phone: value('phone'),
-        company: value('company'),
-        city: value('city'),
-        uf: value('uf').toUpperCase(),
-        source: value('source'),
-        segment: value('segment'),
-        department: value('department'),
-        pipeline: value('cfgDefaultPipeline'),
-        stage: value('cfgDefaultStage'),
-        potential: value('potential'),
-        temperature: value('temperature'),
-        need: value('need'),
-        nextTask: value('nextTask'),
-        saleValue: value('saleValue'),
-        responsibleName: value('responsibleName'),
-        responsiblePhone: value('responsiblePhone')
-      })
+    var button = this;
+    var editing = !!activeCaseId;
+    button.disabled = true;
+    say(editing ? 'Salvando alterações...' : 'Criando ficha...');
+    request(editing ? '/v1/cases/' + encodeURIComponent(activeCaseId) : '/v1/cases', {
+      method: editing ? 'PATCH' : 'POST',
+      body: JSON.stringify(caseFormPayload())
     }).then(function (data) {
       setOutput(data);
-      copyText(data.handoff.message);
-      say('Ficha criada e disponivel para o responsavel.', 'ok');
+      if (!editing && data.handoff) copyText(data.handoff.message);
       activeCaseId = data.case.id;
-      return loadCrmData(activeCaseId);
-    }).then(function () {
-      activate('case');
-      say('Ficha criada. O funil e a etapa estão sincronizados com o Kanban.', 'ok');
+      return loadCrmData(activeCaseId).then(function () {
+        var selectedCase = crmCases.find(function (item) { return item.id === activeCaseId; });
+        setCaseForm(selectedCase);
+        activate('case');
+        say(editing ? 'Alterações salvas na ficha.' : 'Ficha criada. Agora você está nela; novas edições serão salvas nesta mesma ficha.', 'ok');
+      });
     }).catch(function (err) {
-      say('Falha ao criar ficha: ' + err.message, 'err');
+      say((editing ? 'Falha ao salvar alterações: ' : 'Falha ao criar ficha: ') + err.message, 'err');
       setOutput(err.data || err.message);
+    }).finally(function () {
+      button.disabled = false;
+      button.textContent = activeCaseId ? 'Salvar alterações' : 'Criar ficha + link';
     });
   };
   $('listCases').onclick = function () {
@@ -538,17 +689,22 @@
   $('finish').onclick = function () { say('Atendimento marcado como concluido no painel local MVP.', 'ok'); };
   $('snapshot').onclick = function () {
     if (!window.ABRProbe) return say('Probe nao carregado.', 'err');
-    var payload = window.ABRProbe.snapshot(document, value('scenario'));
+    var payload;
+    try { payload = window.ABRProbe.snapshot(document, value('scenario')); }
+    catch (err) { return say('Falha ao ler a estrutura da página: ' + err.message, 'err'); }
     request('/v1/observations', { method: 'POST', body: JSON.stringify({ kind: 'snapshot', payload: payload }) })
       .then(function (data) { setOutput(data); say('Snapshot enviado ao backend.', 'ok'); })
       .catch(function (err) { say('Falha ao enviar snapshot: ' + err.message, 'err'); });
   };
   $('observe').onclick = function () {
     if (!window.ABRProbe) return say('Probe nao carregado.', 'err');
-    say('Observando 15 segundos...');
+    var button = this;
+    button.disabled = true;
+    say('Observando a estrutura por 15 segundos; nenhuma mensagem será enviada...');
     window.ABRProbe.observe(document, 15000).then(function (payload) {
       return request('/v1/observations', { method: 'POST', body: JSON.stringify({ kind: 'observe_15s', payload: payload }) });
     }).then(function (data) { setOutput(data); say('Observacao enviada.', 'ok'); })
-      .catch(function (err) { say('Falha na observacao: ' + err.message, 'err'); });
+      .catch(function (err) { say('Falha na observacao: ' + err.message, 'err'); })
+      .finally(function () { button.disabled = false; });
   };
 })();

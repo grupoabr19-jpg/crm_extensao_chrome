@@ -10,6 +10,7 @@ const fails = async (s: string, p: unknown[] = []) => { try { await db.query(s, 
 beforeAll(async () => {
   db = new PGlite();
   await db.exec(sql("0001_core.sql"));
+  await db.exec(sql("0005_customer_registry.sql"));
   org = (await q("insert into organizations(name) values('ABR teste') returning id"))[0].id;
   await db.exec(sql("seed_reference_demo.sql").replaceAll(":'org_id'", `'${org}'`));
 }, 60_000);
@@ -33,6 +34,13 @@ describe("migration 0001 em PostgreSQL real (PGlite)", () => {
     const ins = (c: string, p: string) => db.query("insert into contact_identifiers(organization_id,contact_id,kind,e164,original,source) values($1,$2,'phone',$3,$3,'t')", [org, c, p]);
     await ins(c1, "+5511999990001"); await ins(c2, "+5511999990001");
     expect(await fails("insert into contact_identifiers(organization_id,contact_id,kind,e164,original,source) values($1,$2,'phone','11999990001','x','t')", [org, c1])).toBe(true);
+  });
+  it("gera códigos de cliente únicos no formato C00000000", async () => {
+    const first = (await q("insert into contacts(organization_id,display_name) values($1,'Cliente A') returning customer_code", [org]))[0].customer_code;
+    const second = (await q("insert into contacts(organization_id,display_name) values($1,'Cliente B') returning customer_code", [org]))[0].customer_code;
+    expect(first).toMatch(/^C[0-9]{8}$/);
+    expect(second).toMatch(/^C[0-9]{8}$/);
+    expect(second).not.toBe(first);
   });
   it("valor desconhecido é NULL, nunca 0 forçado; negativos recusados", async () => {
     const c = (await q("insert into contacts(organization_id) values($1) returning id", [org]))[0].id;
