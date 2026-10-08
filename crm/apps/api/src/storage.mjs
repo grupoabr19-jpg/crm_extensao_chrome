@@ -1,6 +1,8 @@
 import pg from "pg";
 import { randomUUID } from "node:crypto";
 import { pgSslConfig } from "./env.mjs";
+import { normalizeCustomerName } from "./customer-import.mjs";
+import { reactivationReminderAt } from "./customer-lifecycle.mjs";
 
 const { Pool } = pg;
 
@@ -370,6 +372,11 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
         .slice(0, 25);
       return { items, total: all.length };
     },
+    getCase: async (caseId) => {
+      const found = db.cases.find((item) => item.id === caseId);
+      return found ? { case: found } : { error: "case_not_found" };
+    },
+    importCustomerRegistry: async () => ({ error: "persistent_database_required" }),
     listCases: async (options = {}) => {
       const items = options.customerCode
         ? db.cases.filter((item) => item.contact.customer_code === options.customerCode)
@@ -397,12 +404,38 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
     createTask: async (caseId, body) => {
       const found = db.cases.find((c) => c.id === caseId);
       if (!found) return { error: "case_not_found" };
-      const task = { id: randomUUID(), case_id: caseId, title: String(body.title || "Follow-up").slice(0, 200), due_at: body.dueAt || null, status: "open", created_at: new Date().toISOString() };
+      const task = { id: randomUUID(), case_id: caseId, title: String(body.title || "Follow-up").slice(0, 200), due_at: body.dueAt || null, kind: "follow_up", status: "open", created_at: new Date().toISOString() };
       db.tasks ||= [];
       db.tasks.unshift(task);
       return { task };
     },
-    listTasks: async () => ({ items: db.tasks || [], total: (db.tasks || []).length }),
+    recordCustomerContact: async (caseId) => {
+      const found = db.cases.find((item) => item.id === caseId);
+      if (!found) return { error: "case_not_found" };
+      const contactedAt = new Date();
+      found.last_contact_at = contactedAt.toISOString();
+      found.reactivation_reference_at = contactedAt.toISOString();
+      found.reactivation_reference_source = "contact";
+      db.tasks ||= [];
+      for (const task of db.tasks) {
+        if (task.case_id === caseId && task.kind === "reactivation" && task.status === "open") task.status = "cancelled";
+      }
+      const task = {
+        id: randomUUID(),
+        case_id: caseId,
+        title: "Reativar cliente (30 dias antes do limite de 90 dias)",
+        due_at: reactivationReminderAt(contactedAt).toISOString(),
+        kind: "reactivation",
+        status: "open",
+        created_at: contactedAt.toISOString()
+      };
+      db.tasks.unshift(task);
+      return { last_contact_at: found.last_contact_at, task };
+    },
+    listTasks: async (options = {}) => {
+      const items = (db.tasks || []).filter((task) => !options.kind || task.kind === options.kind);
+      return { items, total: items.length };
+    },
     addNote: async (caseId, body) => {
       const found = db.cases.find((c) => c.id === caseId);
       if (!found) return { error: "case_not_found" };
@@ -726,7 +759,10 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       owner: row.owner_user_id ? { id: row.owner_user_id, name: row.owner_name, phone: row.owner_phone, department: row.department_name } : null,
       routing_reason: row.routing_reason || null,
       created_at: row.created_at,
-      updated_at: row.updated_at
+      updated_at: row.updated_at,
+      last_contact_at: row.last_contact_at,
+      reactivation_reference_at: row.reactivation_reference_at,
+      reactivation_reference_source: row.reactivation_reference_source
     };
   }
   function shapeHandoff(row) {
@@ -756,6 +792,7 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
     select c.id, c.contact_id, h.protocol, c.status, co.display_name contact_name, co.customer_code, ci.e164 contact_phone, ci.original original_phone,
       c.company_name, c.city, c.uf, s.label segment_label, c.need, d.name department_name,
       p.name pipeline_name, ps.name stage_name, c.potential, c.temperature, c.sale_value, src.name source_name,
+      c.last_contact_at::text, c.reactivation_reference_at::text, c.reactivation_reference_source,
       c.owner_user_id, u.display_name owner_name, coalesce(wa.e164, hwa.e164) owner_phone, ca.reason routing_reason,
       c.created_at::text, c.updated_at::text
     from cases c
@@ -1092,13 +1129,21 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
         return { items: [], total: count.total };
       }
       const codePrefix = /^\d+$/.test(term) ? `C${term}` : term.toUpperCase();
+      const sourceCodeTerm = term.toUpperCase().replace(/[%_\\\\]/g, "");
+      const alternateSourceCodeTerm = sourceCodeTerm.replace(/^C(?=\d)/, "");
+      const sourceCodePrefix = `${sourceCodeTerm}%`;
+      const alternateSourceCodePrefix = `${alternateSourceCodeTerm}%`;
       const rows = await many(`
         select co.id, co.customer_code, co.display_name as name, co.customer_profile as profile,
           ci.e164 as phone, ci.original as original_phone,
           count(distinct c.id)::int as case_count,
           max(c.updated_at)::text as last_case_at,
           max(coalesce(c.city, co.customer_profile->>'city')) as city,
-          max(coalesce(c.uf, co.customer_profile->>'uf')) as uf
+          max(coalesce(c.uf, co.customer_profile->>'uf')) as uf,
+          coalesce(ps.item_count,0)::int as item_count,
+          coalesce(ps.order_count,0)::int as order_count,
+          coalesce(ps.total_sales,0)::numeric as total_sales,
+          ps.last_purchase_at::text as last_purchase_at
         from contacts co
         left join lateral (
           select e164, original
@@ -1108,16 +1153,252 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
           limit 1
         ) ci on true
         left join cases c on c.contact_id=co.id and c.organization_id=co.organization_id
+        left join customer_purchase_summaries ps on ps.organization_id=co.organization_id and ps.contact_id=co.id
         where co.organization_id=$1
           and (position(lower($2) in lower(coalesce(co.display_name,''))) > 0
-            or co.customer_code ilike $3)
-        group by co.id, co.customer_code, co.display_name, co.customer_profile, ci.e164, ci.original
+            or co.customer_code ilike $3
+            or coalesce(co.customer_profile->>'sourceCustomerCode','') ilike $5
+            or coalesce(co.customer_profile->>'sourceCustomerCode','') ilike $7
+            or exists (
+              select 1
+              from customer_source_keys csk
+              where csk.organization_id=co.organization_id
+                and csk.contact_id=co.id
+                and csk.source_system='clientes_inativos'
+                and (csk.source_key ilike $5 or csk.source_key ilike $7)
+            ))
+        group by co.id, co.customer_code, co.display_name, co.customer_profile, ci.e164, ci.original,
+          ps.item_count, ps.order_count, ps.total_sales, ps.last_purchase_at
         order by case when lower(co.customer_code)=$4 then 0 else 1 end,
+          case when lower(coalesce(co.customer_profile->>'sourceCustomerCode',''))=lower($6)
+            or lower(coalesce(co.customer_profile->>'sourceCustomerCode',''))=lower($8)
+            or exists (
+              select 1
+              from customer_source_keys csk
+              where csk.organization_id=co.organization_id
+                and csk.contact_id=co.id
+                and csk.source_system='clientes_inativos'
+                and (lower(csk.source_key)=lower($6) or lower(csk.source_key)=lower($8))
+            ) then 0 else 1 end,
           case when count(distinct c.id)>0 then 0 else 1 end,
           max(c.updated_at) desc nulls last, co.display_name
         limit 25
-      `, [ctx.org.id, term, `${codePrefix.replace(/[%_\\\\]/g, "")}%`, term.toUpperCase()]);
+      `, [ctx.org.id, term, `${codePrefix.replace(/[%_\\\\]/g, "")}%`, term.toUpperCase(), sourceCodePrefix, sourceCodeTerm, alternateSourceCodePrefix, alternateSourceCodeTerm]);
       return { items: rows, total: rows.length };
+    },
+    getCase: async (caseId) => {
+      const ctx = await ready();
+      const row = await one(`${caseSelect} where c.organization_id=$1 and c.id=$2 order by h.created_at desc limit 1`, [ctx.org.id, caseId]);
+      return row ? { case: shapeCase(row) } : { error: "case_not_found" };
+    },
+    importCustomerRegistry: async (plan) => {
+      const ctx = await ready();
+      if (!Array.isArray(plan.customers) || plan.customers.length === 0) {
+        throw new Error("customer_import_has_no_customers");
+      }
+      const client = await pool.connect();
+      try {
+        await client.query("begin");
+        const existing = (await client.query(`
+          select co.id, co.display_name, co.customer_profile, co.customer_code,
+            coalesce(array_agg(distinct ci.e164) filter (where ci.e164 is not null), '{}') phones
+          from contacts co
+          left join contact_identifiers ci on ci.organization_id=co.organization_id and ci.contact_id=co.id and ci.kind='phone'
+          where co.organization_id=$1
+          group by co.id
+        `, [ctx.org.id])).rows;
+        const sources = (await client.query(
+          "select source_key, contact_id from customer_source_keys where organization_id=$1 and source_system='clientes_inativos'",
+          [ctx.org.id]
+        )).rows;
+        const sourceMap = new Map(sources.map((row) => [row.source_key, row.contact_id]));
+        const byPhone = new Map();
+        const byEmail = new Map();
+        const byName = new Map();
+        const addToMap = (map, key, id) => {
+          if (!key) return;
+          const matches = map.get(key) || new Set();
+          matches.add(id);
+          map.set(key, matches);
+        };
+        for (const row of existing) {
+          addToMap(byName, normalizeCustomerName(row.display_name), row.id);
+          addToMap(byEmail, String(row.customer_profile?.email || "").trim().toLowerCase(), row.id);
+          for (const phone of row.phones) addToMap(byPhone, phone, row.id);
+        }
+        const incomingNameCounts = new Map();
+        const incomingPhoneCounts = new Map();
+        const incomingEmailCounts = new Map();
+        const prepared = plan.customers.map((record) => {
+          const phone = normalizePhone(record.phone || "");
+          const normalizedPhone = phone.ok ? phone.e164 : null;
+          const email = String(record.email || "").trim().toLowerCase() || null;
+          incomingNameCounts.set(record.normalizedName, (incomingNameCounts.get(record.normalizedName) || 0) + 1);
+          if (normalizedPhone) incomingPhoneCounts.set(normalizedPhone, (incomingPhoneCounts.get(normalizedPhone) || 0) + 1);
+          if (email) incomingEmailCounts.set(email, (incomingEmailCounts.get(email) || 0) + 1);
+          const profile = Object.fromEntries(Object.entries(record.profile || {}).filter(([, value]) => value != null && value !== ""));
+          return { ...record, phone: phone.ok ? phone : null, email, profile, contactId: sourceMap.get(record.sourceCode) || null };
+        });
+        for (const record of prepared) {
+          if (record.contactId) continue;
+          const candidates = new Set();
+          const collectUnique = (map, key, incomingCount) => {
+            if (!key || incomingCount !== 1) return;
+            const matches = map.get(key);
+            if (matches?.size === 1) candidates.add([...matches][0]);
+          };
+          collectUnique(byPhone, record.phone?.e164, record.phone ? incomingPhoneCounts.get(record.phone.e164) : 0);
+          collectUnique(byEmail, record.email, record.email ? incomingEmailCounts.get(record.email) : 0);
+          collectUnique(byName, record.normalizedName, incomingNameCounts.get(record.normalizedName));
+          if (candidates.size === 1) record.contactId = [...candidates][0];
+        }
+
+        const chunkSize = 500;
+        const jsonChunks = async (records, statement) => {
+          for (let offset = 0; offset < records.length; offset += chunkSize) {
+            await client.query(statement, [ctx.org.id, JSON.stringify(records.slice(offset, offset + chunkSize))]);
+          }
+        };
+        const toSave = prepared.map((record) => ({
+          ...record,
+          phone: record.phone?.e164 || null,
+          phone_original: record.phone?.original || null
+        }));
+        const updates = toSave.filter((record) => record.contactId);
+        await jsonChunks(updates.map((record) => ({
+          contact_id: record.contactId,
+          display_name: record.name,
+          profile: record.profile
+        })), `
+          update contacts co
+          set display_name=coalesce(nullif(x.display_name,''),co.display_name),
+              customer_profile=co.customer_profile || x.profile
+          from jsonb_to_recordset($2::jsonb) as x(contact_id uuid, display_name text, profile jsonb)
+          where co.organization_id=$1 and co.id=x.contact_id
+        `);
+        const inserts = toSave.filter((record) => !record.contactId);
+        const insertedBySource = new Map();
+        for (let offset = 0; offset < inserts.length; offset += chunkSize) {
+          const batch = inserts.slice(offset, offset + chunkSize);
+          const result = await client.query(`
+            insert into contacts(organization_id,display_name,customer_profile)
+            select $1,x.display_name,x.profile
+            from jsonb_to_recordset($2::jsonb) as x(display_name text, profile jsonb)
+            returning id, customer_code, customer_profile->>'sourceCustomerCode' as source_code
+          `, [ctx.org.id, JSON.stringify(batch.map((record) => ({ display_name: record.name, profile: record.profile })))]);
+          for (const row of result.rows) insertedBySource.set(row.source_code, row.id);
+        }
+        for (const record of toSave) {
+          if (!record.contactId) record.contactId = insertedBySource.get(record.sourceCode);
+        }
+
+        const phoneRecords = [...new Map(toSave.filter((record) => record.phone)
+          .map((record) => [`${record.contactId}:${record.phone}`, {
+            contact_id: record.contactId,
+            e164: record.phone,
+            original: record.phone_original
+          }])).values()];
+        await jsonChunks(phoneRecords, `
+          insert into contact_identifiers(organization_id,contact_id,kind,e164,original,source,reliable)
+          select $1,x.contact_id,'phone',x.e164,x.original,'customer_registry_import',false
+          from jsonb_to_recordset($2::jsonb) as x(contact_id uuid,e164 text,original text)
+          on conflict (organization_id,contact_id,e164) do update
+          set original=excluded.original,source=excluded.source
+        `);
+        const sourceRecords = toSave.map((record) => ({ source_key: record.sourceCode, contact_id: record.contactId }));
+        await jsonChunks(sourceRecords, `
+          insert into customer_source_keys(organization_id,source_system,source_key,contact_id)
+          select $1,'clientes_inativos',x.source_key,x.contact_id
+          from jsonb_to_recordset($2::jsonb) as x(source_key text,contact_id uuid)
+          on conflict (organization_id,source_system,source_key) do update
+          set contact_id=excluded.contact_id,imported_at=now()
+        `);
+
+        let historyLinked = 0;
+        let historyAmbiguous = 0;
+        let historyUnmatched = 0;
+        if (Array.isArray(plan.summaries) && plan.summaries.length) {
+          const names = (await client.query("select id,display_name from contacts where organization_id=$1", [ctx.org.id])).rows;
+          const contactsByName = new Map();
+          for (const row of names) addToMap(contactsByName, normalizeCustomerName(row.display_name), row.id);
+          const linked = [];
+          for (const summary of plan.summaries) {
+            const contacts = contactsByName.get(summary.normalizedName);
+            if (contacts?.size === 1) {
+              linked.push({
+                contact_id: [...contacts][0],
+                item_count: summary.itemCount,
+                order_count: summary.orderCount,
+                total_sales: Number(summary.totalSales.toFixed(2)),
+                last_purchase_at: summary.lastPurchaseAt
+              });
+              historyLinked += 1;
+            } else if (contacts?.size > 1) {
+              historyAmbiguous += 1;
+            } else {
+              historyUnmatched += 1;
+            }
+          }
+          await jsonChunks(linked, `
+            insert into customer_purchase_summaries(organization_id,contact_id,item_count,order_count,total_sales,last_purchase_at,imported_at)
+            select $1,x.contact_id,x.item_count,x.order_count,x.total_sales,x.last_purchase_at,now()
+            from jsonb_to_recordset($2::jsonb) as x(
+              contact_id uuid,item_count integer,order_count integer,total_sales numeric,last_purchase_at timestamptz
+            )
+            on conflict (organization_id,contact_id) do update
+            set item_count=excluded.item_count,order_count=excluded.order_count,total_sales=excluded.total_sales,
+                last_purchase_at=excluded.last_purchase_at,imported_at=now()
+          `);
+          const referenceRecords = linked.filter((record) => record.last_purchase_at).map((record) => ({
+            contact_id: record.contact_id,
+            reference_at: record.last_purchase_at
+          }));
+          if (referenceRecords.length) {
+            await jsonChunks(referenceRecords, `
+              with incoming as (
+                select * from jsonb_to_recordset($2::jsonb) as x(contact_id uuid,reference_at timestamptz)
+              ), updated as (
+                update cases c
+                set reactivation_reference_at=i.reference_at,
+                    reactivation_reference_source='purchase'
+                from incoming i
+                where c.organization_id=$1 and c.contact_id=i.contact_id
+                  and (c.reactivation_reference_at is null or c.reactivation_reference_at<=i.reference_at)
+                returning c.id,c.contact_id,c.owner_user_id,c.reactivation_reference_at,c.updated_at
+              ), latest as (
+                select distinct on (contact_id) id,owner_user_id,reactivation_reference_at
+                from updated
+                order by contact_id,updated_at desc,id
+              ), cancelled as (
+                update tasks t set status='cancelled'
+                from latest l
+                where t.organization_id=$1 and t.case_id=l.id and t.kind='reactivation' and t.status='open'
+                returning t.id
+              )
+              insert into tasks(organization_id,case_id,assignee_user_id,title,due_at,kind)
+              select $1,l.id,l.owner_user_id,'Reativar cliente (30 dias antes do limite de 90 dias)',
+                l.reactivation_reference_at + interval '60 days','reactivation'
+              from latest l
+              left join cancelled on true
+            `);
+          }
+        }
+        await client.query("commit");
+        return {
+          imported: inserts.length,
+          updated: updates.length,
+          totalCustomers: prepared.length,
+          phoneNumbers: phoneRecords.length,
+          historyLinked,
+          historyAmbiguous,
+          historyUnmatched
+        };
+      } catch (error) {
+        await client.query("rollback").catch(() => {});
+        throw error;
+      } finally {
+        client.release();
+      }
     },
     listCases: async (options = {}) => {
       const ctx = await ready();
@@ -1153,35 +1434,69 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       return { funnel: pipeline, columns };
     },
     moveCaseStage: async (caseId, stageId) => {
-      await ready();
-      const stage = await one("select ps.id, ps.name, ps.pipeline_id from pipeline_stages ps where ps.id=$1", [stageId]);
+      const ctx = await ready();
+      const stage = await one(`
+        select ps.id,ps.name,ps.pipeline_id
+        from pipeline_stages ps join pipelines p on p.id=ps.pipeline_id
+        where ps.id=$1 and p.organization_id=$2
+      `, [stageId, ctx.org.id]);
       if (!stage) return { error: "stage_not_found" };
-      const updated = await one("update cases set stage_id=$2, pipeline_id=$3, updated_at=now() where id=$1 returning id", [caseId, stage.id, stage.pipeline_id]);
+      const updated = await one("update cases set stage_id=$3, pipeline_id=$4, updated_at=now() where organization_id=$1 and id=$2 returning id", [ctx.org.id, caseId, stage.id, stage.pipeline_id]);
       if (!updated) return { error: "case_not_found" };
+      await pool.query("insert into stage_history(case_id,stage_id) values($1,$2)", [caseId, stage.id]);
       const crmCase = shapeCase(await one(`${caseSelect} where c.id=$1 order by h.created_at desc limit 1`, [caseId]));
       return { case: crmCase };
     },
     createTask: async (caseId, body) => {
       const ctx = await ready();
       const task = await one(
-        "insert into tasks(organization_id,case_id,assignee_user_id,title,due_at) select $1,c.id,c.owner_user_id,$3,$4 from cases c where c.id=$2 returning id, case_id, title, due_at::text, status, created_at::text",
+        "insert into tasks(organization_id,case_id,assignee_user_id,title,due_at) select $1,c.id,c.owner_user_id,$3,$4 from cases c where c.organization_id=$1 and c.id=$2 returning id, case_id, title, due_at::text, status, created_at::text",
         [ctx.org.id, caseId, String(body.title || "Follow-up").slice(0, 200), body.dueAt || null]
       );
       if (!task) return { error: "case_not_found" };
       return { task };
     },
-    listTasks: async () => {
+    recordCustomerContact: async (caseId) => {
+      const ctx = await ready();
+      const current = await one(
+        "select id from cases where organization_id=$1 and id=$2",
+        [ctx.org.id, caseId]
+      );
+      if (!current) return { error: "case_not_found" };
+      const contactedAt = new Date();
+      const dueAt = reactivationReminderAt(contactedAt);
+      const client = await pool.connect();
+      try {
+        await client.query("begin");
+        await client.query("update cases set last_contact_at=$3,reactivation_reference_at=$3,reactivation_reference_source='contact',updated_at=now() where organization_id=$1 and id=$2", [ctx.org.id, caseId, contactedAt.toISOString()]);
+        await client.query("update tasks set status='cancelled' where organization_id=$1 and case_id=$2 and kind='reactivation' and status='open'", [ctx.org.id, caseId]);
+        const task = (await client.query(`
+          insert into tasks(organization_id,case_id,assignee_user_id,title,due_at,kind)
+          select $1,c.id,c.owner_user_id,'Reativar cliente (30 dias antes do limite de 90 dias)',$3,'reactivation'
+          from cases c where c.organization_id=$1 and c.id=$2
+          returning id,case_id,title,due_at::text,kind,status,created_at::text
+        `, [ctx.org.id, caseId, dueAt.toISOString()])).rows[0];
+        await client.query("commit");
+        return { last_contact_at: contactedAt.toISOString(), task };
+      } catch (error) {
+        await client.query("rollback").catch(() => {});
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+    listTasks: async (options = {}) => {
       const ctx = await ready();
       const rows = await many(`
-        select t.id, t.case_id, t.title, t.due_at::text, t.status, t.created_at::text, co.display_name contact_name, u.display_name assignee_name
+        select t.id, t.case_id, t.title, t.due_at::text, t.kind, t.status, t.created_at::text, co.display_name contact_name, u.display_name assignee_name
         from tasks t
         join cases c on c.id=t.case_id
         join contacts co on co.id=c.contact_id
         left join users u on u.id=t.assignee_user_id
-        where t.organization_id=$1
+        where t.organization_id=$1 and ($2::text is null or t.kind=$2)
         order by coalesce(t.due_at, t.created_at), t.created_at desc
         limit 200
-      `, [ctx.org.id]);
+      `, [ctx.org.id, options.kind || null]);
       return { items: rows, total: rows.length };
     },
     addNote: async (caseId, body) => {

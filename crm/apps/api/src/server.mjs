@@ -5,6 +5,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isPlaceholderConnectionString, loadDotEnv } from "./env.mjs";
 import { parseImageDataUrl } from "./ai-vision.mjs";
+import { parseInactiveCustomers, parseProductionHistory } from "./customer-import.mjs";
 import { makeMemoryStorage, makePostgresStorage } from "./storage.mjs";
 
 loadDotEnv();
@@ -39,6 +40,7 @@ function externalHandoffMessage({ firstName, responsibleName, department, link, 
 }
 
 const storageDeps = { protocol, handoffLink, externalHandoffMessage };
+const customerImportStages = new Map();
 let storage = !isPlaceholderConnectionString(process.env.DATABASE_URL) && process.env.ABR_STORAGE !== "memory"
   ? makePostgresStorage({ connectionString: process.env.DATABASE_URL, ...storageDeps })
   : makeMemoryStorage(storageDeps);
@@ -99,6 +101,29 @@ function readBody(req, maxBytes = 1024 * 1024) {
       } catch {
         reject(new Error("invalid_json"));
       }
+    });
+    req.on("error", reject);
+  });
+}
+
+function readBinaryBody(req, maxBytes = 50 * 1024 * 1024) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    let tooLarge = false;
+    req.on("data", (chunk) => {
+      if (tooLarge) return;
+      size += chunk.length;
+      if (size > maxBytes) {
+        tooLarge = true;
+        chunks.length = 0;
+      } else {
+        chunks.push(chunk);
+      }
+    });
+    req.on("end", () => {
+      if (tooLarge) return reject(new Error("body_too_large"));
+      resolve(Buffer.concat(chunks));
     });
     req.on("error", reject);
   });
@@ -392,6 +417,12 @@ async function handler(req, res) {
     }
 
     const updateCase = /^\/v1\/cases\/([^/]+)$/.exec(url.pathname);
+    if (req.method === "GET" && updateCase) {
+      await storage.ready();
+      const result = await storage.getCase(decodeURIComponent(updateCase[1]));
+      if (result.error === "case_not_found") return send(res, 404, result);
+      return send(res, 200, result);
+    }
     if (req.method === "PATCH" && updateCase) {
       const body = await readBody(req);
       await storage.ready();
@@ -455,7 +486,95 @@ async function handler(req, res) {
 
     if (req.method === "GET" && url.pathname === "/v1/tasks") {
       await storage.ready();
-      return send(res, 200, await storage.listTasks());
+      return send(res, 200, await storage.listTasks({ kind: url.searchParams.get("kind") }));
+    }
+
+    const recordContact = /^\/v1\/cases\/([^/]+)\/contact$/.exec(url.pathname);
+    if (req.method === "POST" && recordContact) {
+      await storage.ready();
+      const result = await storage.recordCustomerContact(decodeURIComponent(recordContact[1]));
+      if (result.error === "case_not_found") return send(res, 404, result);
+      return send(res, 201, result);
+    }
+
+    if (req.method === "POST" && url.pathname === "/v1/import/customer-registry/preview") {
+      if (!requireRoles(req, res, ["admin", "supervisor"])) return;
+      const kind = url.searchParams.get("kind");
+      if (kind !== "inactive" && kind !== "production") return send(res, 400, { error: "invalid_import_kind" });
+      const token = String(req.headers["x-import-token"] || "");
+      const now = Date.now();
+      for (const [key, value] of customerImportStages) {
+        if (value.expiresAt <= now) customerImportStages.delete(key);
+      }
+      let stage = token ? customerImportStages.get(token) : null;
+      if (token && !stage) return send(res, 410, { error: "import_preview_expired" });
+      if (kind === "production" && (!stage || !stage.plan.customers?.length)) {
+        return send(res, 400, { error: "customer_workbook_preview_required" });
+      }
+      const buffer = await readBinaryBody(req);
+      try {
+        if (kind === "inactive") {
+          const parsed = await parseInactiveCustomers(buffer);
+          if (!parsed.customers.length) return send(res, 422, { error: "customer_workbook_has_no_records" });
+          stage = {
+            plan: { customers: parsed.customers, summaries: [] },
+            expiresAt: now + 30 * 60 * 1000
+          };
+          const importToken = cryptoRandomBytes(24).toString("base64url");
+          customerImportStages.set(importToken, stage);
+          return send(res, 200, {
+            token: importToken,
+            preview: {
+              customers: parsed.customers.length,
+              sourceRows: parsed.sourceRows,
+              skippedRows: parsed.skippedRows,
+              duplicateSourceCodes: parsed.duplicateSourceCodes
+            }
+          });
+        }
+        const parsed = await parseProductionHistory(buffer);
+        stage.plan.summaries = parsed.summaries;
+        stage.expiresAt = now + 30 * 60 * 1000;
+        const names = new Map();
+        for (const record of stage.plan.customers) {
+          names.set(record.normalizedName, (names.get(record.normalizedName) || 0) + 1);
+        }
+        let exactUniqueNames = 0;
+        let ambiguousNames = 0;
+        let unmatchedNames = 0;
+        for (const summary of parsed.summaries) {
+          const matches = names.get(summary.normalizedName) || 0;
+          if (matches === 1) exactUniqueNames += 1;
+          else if (matches > 1) ambiguousNames += 1;
+          else unmatchedNames += 1;
+        }
+        return send(res, 200, {
+          token,
+          preview: {
+            historyRows: parsed.sourceRows,
+            uniqueCustomerNames: parsed.summaries.length,
+            exactUniqueNames,
+            ambiguousNames,
+            unmatchedNames,
+            skippedRows: parsed.skippedRows
+          }
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        const status = message.startsWith("workbook_missing_columns:") ? 422 : 400;
+        return send(res, status, { error: status === 422 ? message : "invalid_workbook" });
+      }
+    }
+
+    if (req.method === "POST" && url.pathname === "/v1/import/customer-registry/commit") {
+      if (!requireRoles(req, res, ["admin", "supervisor"])) return;
+      const body = await readBody(req);
+      const stage = customerImportStages.get(String(body.token || ""));
+      if (!stage || stage.expiresAt <= Date.now()) return send(res, 410, { error: "import_preview_expired" });
+      const result = await storage.importCustomerRegistry(stage.plan);
+      if (result.error === "persistent_database_required") return send(res, 503, result);
+      customerImportStages.delete(String(body.token));
+      return send(res, 200, result);
     }
 
     const note = /^\/v1\/cases\/([^/]+)\/notes$/.exec(url.pathname);

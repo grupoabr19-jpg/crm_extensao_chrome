@@ -56,6 +56,9 @@ try {
   await applyMigration("0005_customer_registry", async () => {
     await client.query(readFileSync(resolve(migrationsDir, "0005_customer_registry.sql"), "utf8"));
   });
+  await applyMigration("0006_customer_import_lifecycle", async () => {
+    await client.query(readFileSync(resolve(migrationsDir, "0006_customer_import_lifecycle.sql"), "utf8"));
+  });
   await client.query("commit");
   console.log("Migrations concluidas.");
 } catch (err) {

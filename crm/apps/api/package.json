@@ -8,5 +8,8 @@
     "smoke:test": "node src/smoke.mjs",
     "start": "node src/server.mjs",
     "dev": "node src/server.mjs"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0"
   }
 }

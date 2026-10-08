@@ -11,6 +11,7 @@
     .app{min-height:100vh;display:grid;grid-template-columns:248px minmax(0,1fr)}.rail{position:sticky;top:0;height:100vh;background:var(--navy);color:#fff;display:flex;flex-direction:column;padding:25px 16px 18px;gap:8px;z-index:5}.brand{display:flex;align-items:center;gap:12px;padding:0 8px 29px}.logo{height:42px;width:42px;border-radius:13px;background:linear-gradient(145deg,#ffb34e,#ef841a);display:grid;place-items:center;color:#fff;font-size:13px;font-weight:850;letter-spacing:.04em;box-shadow:0 6px 16px #f0870030}.brand-name{font-size:15px;font-weight:750;letter-spacing:.02em}.brand-caption{font-size:10px;text-transform:uppercase;letter-spacing:.13em;color:#9aabc4;margin-top:3px}.nav-caption{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:#8ea0bb;padding:0 12px;margin:5px 0 3px}.rail button{display:flex;align-items:center;gap:12px;width:100%;min-height:44px;padding:0 12px;border:1px solid transparent;border-radius:10px;background:transparent;color:#b8c4d5;text-align:left;font-size:13px;font-weight:570}.rail button:hover{background:#ffffff0d;color:#fff}.rail button.active{background:#ffffff14;border-color:#ffffff13;color:#fff;box-shadow:inset 3px 0 0 var(--orange)}.rail button.active .nav-icon{color:#ffab46}.nav-icon{width:18px;height:18px;display:grid;place-items:center;color:#9caec5;flex:none}.nav-icon svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.rail-spacer{flex:1}.sidebar-note{margin:10px 5px 14px;padding:13px;border:1px solid #ffffff14;border-radius:12px;background:#ffffff08}.sidebar-note-title{font-size:11px;font-weight:650;color:#dce5f1}.sidebar-note-copy{font-size:10px;line-height:1.55;color:#96a8c1;margin-top:5px}.rail .rail-refresh{min-height:40px;border-color:#ffffff15}
     .main{min-width:0;display:flex;flex-direction:column}.topbar{min-height:112px;background:var(--paper);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:24px;padding:22px 32px}.page-title h1{font-size:24px;line-height:1.2;letter-spacing:-.04em;color:var(--ink);margin:0;font-weight:730}.sub{font-size:12px;color:var(--muted);margin-top:6px}.tools{display:flex;align-items:center;justify-content:flex-end;gap:9px;flex-wrap:wrap}.tools select,.tools input{height:40px;border:1px solid #dfe4eb;border-radius:9px;padding:0 12px;background:#fff;color:var(--ink);font-size:12px;transition:border .18s,box-shadow .18s}.tools select{min-width:145px}.tools input{width:230px}.tools input::placeholder{color:#9aa5b5}.tools select:focus,.tools input:focus,.formBox input:focus,.formBox select:focus,.drawer input:focus,.drawer select:focus,.drawer textarea:focus{outline:none;border-color:#eca454;box-shadow:0 0 0 3px #ee8a221c}.button{height:40px;padding:0 13px;border:1px solid transparent;border-radius:9px;background:var(--orange);color:white;font-size:12px;font-weight:650;white-space:nowrap}.button:hover{background:var(--orange-dark);box-shadow:0 4px 12px #ee8a2233}.button.secondary{background:#fff;border-color:#dfe4eb;color:#41516a}.button.secondary:hover{background:#f7f8fa;border-color:#cbd3df}.button.danger{background:#bd4c43;color:#fff}.connection-status{display:inline-flex;align-items:center;gap:7px;min-width:0;color:var(--muted);font-size:11px;white-space:nowrap;padding:0 3px}.connection-status:before{content:"";width:7px;height:7px;border-radius:50%;background:#56a979;box-shadow:0 0 0 3px #56a9791d}.connection-status[data-state="error"]:before{background:#c9574f;box-shadow:0 0 0 3px #c9574f1d}
     .kpis{display:grid;grid-template-columns:repeat(6,minmax(130px,1fr));gap:12px;padding:20px 32px;background:var(--canvas);border:0}.kpi{position:relative;min-height:86px;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:15px 16px;box-shadow:0 2px 6px #1b2b4310;transition:transform .2s,box-shadow .2s}.kpi:hover{transform:translateY(-2px);box-shadow:var(--shadow)}.kpi b{display:block;color:var(--ink);font-size:23px;line-height:1.1;font-weight:730;letter-spacing:-.04em}.kpi span{display:block;color:var(--muted);font-size:11px;margin-top:7px}.kpi:nth-child(2) b,.kpi:nth-child(5) b{color:var(--green)}.kpi:nth-child(3) b{color:#a45b48}
+    .searchWrap{position:relative}.customerSearchResults{position:absolute;z-index:8;top:calc(100% + 7px);right:0;width:min(420px,90vw);max-height:360px;overflow:auto;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 16px 40px #17243b24;padding:6px}.customerResult{display:block;width:100%;padding:10px 11px;border:0;border-radius:8px;background:#fff;text-align:left;color:var(--ink)}.customerResult:hover{background:#f4f7fb}.customerResult b,.customerResult span{display:block}.customerResult b{font-size:12px}.customerResult span{font-size:10px;color:var(--muted);margin-top:3px}.searchHint{padding:9px 10px;color:var(--muted);font-size:11px}.reactivationAlerts{margin:0 32px 12px;padding:12px 14px;border:1px solid #f2d8ad;border-radius:11px;background:#fff8eb;color:#72501e}.reactivationAlerts h2{margin:0 0 8px;font-size:12px}.reactivationAlert{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;border-top:1px solid #f3e5cd;font-size:11px}.reactivationAlert button{border:0;background:none;color:#895912;font-weight:700;text-align:left}.customerDialog{width:min(620px,calc(100vw - 28px));max-height:min(80vh,760px);border:1px solid var(--line);border-radius:16px;padding:0;box-shadow:0 24px 70px #17243b35}.customerDialog::backdrop{background:#17243b6e}.customerDialogHeader{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 22px;border-bottom:1px solid var(--line)}.customerDialogHeader h2{margin:0;font-size:17px}.customerDialogBody{padding:18px 22px;overflow:auto}.customerDetailsGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.customerDetail{padding:10px;border:1px solid var(--line);border-radius:9px}.customerDetail span{display:block;font-size:10px;color:var(--muted);margin-bottom:4px}.customerDetail b{font-size:12px;overflow-wrap:anywhere}.customerCase{display:block;width:100%;margin-top:7px;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;text-align:left;color:var(--ink);font-size:11px}.importBox{margin-top:18px;background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:0 2px 8px #1b2b4308}.importBox h2{margin:0;font-size:15px}.importBox p{font-size:11px;line-height:1.5;color:var(--muted)}.importFiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.importFiles label{font-size:11px;font-weight:650}.importFiles input{display:block;width:100%;margin-top:6px;font-size:11px}.importActions{display:flex;gap:9px;margin-top:14px}.importStatus{margin-top:10px;font-size:11px;color:var(--muted)}
     .view{display:none;min-height:0}.view.active{display:flex}.board{flex:1;overflow:auto;padding:4px 32px 28px;gap:15px;align-items:stretch;scrollbar-color:#ccd4df transparent;scrollbar-width:thin}.col{flex:0 0 292px;width:292px;background:#edf0f5;border:1px solid #e5e8ee;border-radius:13px;display:flex;flex-direction:column;max-height:calc(100vh - 270px);min-height:260px;overflow:hidden}.colHead{position:sticky;top:0;z-index:1;padding:15px 14px 13px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e3e7ee;background:#edf0f5}.colHead b{position:relative;font-size:12px;font-weight:700;color:#34445d;padding-left:13px}.colHead b:before{content:"";position:absolute;left:0;top:4px;width:6px;height:6px;border-radius:50%;background:#71839d}.col:nth-child(2) .colHead b:before{background:#5c89c8}.col:nth-child(3) .colHead b:before{background:#df9a39}.col:nth-child(4) .colHead b:before{background:#8a77c4}.col:nth-child(5) .colHead b:before{background:#46a078}.count{min-width:24px;height:23px;display:grid;place-items:center;font-size:10px;font-weight:700;background:#fff;color:#596a82;border:1px solid #e2e6ed;border-radius:7px;padding:0 6px}.cards{padding:10px;overflow:auto;flex:1;display:grid;align-content:start;gap:9px;scrollbar-width:thin}.cards.dragover{outline:2px dashed var(--orange);outline-offset:-5px;background:#fff7ec}.card{position:relative;background:var(--paper);border:1px solid #e1e6ed;border-radius:11px;padding:13px 13px 12px;box-shadow:0 2px 6px #1c2b4210;cursor:grab;transition:transform .18s,border-color .18s,box-shadow .18s}.card:before{content:"";position:absolute;left:-1px;top:13px;bottom:13px;width:3px;border-radius:0 3px 3px 0;background:#d7dee8}.card:hover{transform:translateY(-2px);border-color:#d1d9e4;box-shadow:0 8px 18px #1c2b4215}.card:active{cursor:grabbing}.card b{display:block;font-size:13px;line-height:1.35;color:#223149;margin-bottom:7px;font-weight:680}.line{font-size:10.5px;line-height:1.5;color:#768398;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.line:first-of-type{color:#64758d}.tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:10px}.tag{font-size:9px;font-weight:620;border-radius:6px;padding:4px 7px;background:#edf1f6;color:#54657d}.tag.hot{background:#fff2df;color:#a25d0a}.tag.status{background:#e7f5ed;color:#247148;min-width:auto;text-align:left}.empty{font-size:11px;color:#8994a5;padding:16px 8px;text-align:center}.board>.empty{align-self:flex-start;padding:30px;color:var(--muted)}
     .admin{flex:1;overflow:auto;padding:28px 32px 40px;display:block}.adminIntro{margin-bottom:22px}.adminIntro h2{font-size:19px;letter-spacing:-.03em;margin:0;color:var(--ink)}.adminIntro p{font-size:12px;color:var(--muted);margin:6px 0 0}.adminGrid{display:grid;grid-template-columns:minmax(290px,350px) minmax(0,1fr);gap:18px;align-items:start}.formBox,.tableBox{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:0 2px 8px #1b2b4308}.formBox h2,.tableBox h2{font-size:14px;color:#293a54;margin:0 0 5px;font-weight:700}.boxSub{font-size:11px;color:var(--muted);margin:0 0 17px;line-height:1.5}.formBox label{display:block;font-size:10px;color:#596981;margin:13px 0 5px;font-weight:650}.formBox input,.formBox select{width:100%;height:39px;border:1px solid #dfe4eb;border-radius:8px;padding:0 10px;background:#fff;color:var(--ink);font-size:12px}.formBox input::placeholder{color:#a4adba}.routesLine,.row{display:grid;grid-template-columns:1fr 1fr;gap:9px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.muted{color:#8290a3;font-size:10px}.formHint{border-top:1px solid #edf0f4;margin:15px 0 0;padding-top:12px;line-height:1.55}.tableScroll{overflow:auto;margin-top:15px}table{width:100%;border-collapse:collapse;font-size:11px;text-align:left}th,td{border-bottom:1px solid #edf0f4;text-align:left;padding:11px 9px;vertical-align:top}th{color:#748197;background:#f8f9fb;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;white-space:nowrap}td{color:#384860}tr:last-child td{border-bottom:0}tbody tr:hover{background:#fafbfc}.pill{display:inline-block;border-radius:6px;background:#eef2f7;color:#52647c;padding:4px 7px;margin:1px;font-size:9px;font-weight:600;white-space:nowrap}.pill.off{background:#fcebea;color:#a3443d}
     .loginScreen{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:24px;background:linear-gradient(135deg,#101d33,#263959)}.loginCard{width:min(420px,100%);padding:32px;border:1px solid #ffffff20;border-radius:20px;background:#fff;box-shadow:0 28px 80px #07112170}.loginBrand{display:flex;align-items:center;gap:11px;margin-bottom:26px}.loginMark{width:43px;height:43px;border-radius:13px;background:linear-gradient(145deg,#ffb34e,#ef841a);display:grid;place-items:center;color:white;font-weight:850}.loginBrand b{display:block;font-size:14px}.loginBrand span{display:block;margin-top:3px;color:#8390a2;font-size:10px}.loginCard h1{margin:0;color:#17243b;font-size:22px;letter-spacing:-.04em}.loginCard p{margin:7px 0 20px;color:#718096;font-size:12px;line-height:1.55}.loginCard label{display:block;margin:13px 0 5px;color:#596981;font-size:11px;font-weight:650}.loginCard input{width:100%;height:43px;padding:0 11px;border:1px solid #dfe4eb;border-radius:9px;background:white;color:#17243b;font-size:13px}.loginCard button{width:100%;height:43px;margin-top:18px;border:0;border-radius:9px;background:#ee8a22;color:white;font-size:13px;font-weight:700}.loginCard button:disabled{opacity:.65;cursor:wait}.loginError{min-height:18px;margin-top:9px;color:#bd4c43;font-size:11px}.rememberSession{display:flex!important;align-items:center;gap:8px;margin-top:14px!important}.rememberSession input{width:15px;height:15px;margin:0;accent-color:#ee8a22}.rememberSession span{font-weight:500}.sessionUser{font-size:11px;color:#718096}
@@ -69,7 +70,7 @@
         <div class="page-title"><h1>Funil de vendas</h1><div class="sub">Visão geral dos leads e das oportunidades em andamento</div></div>
         <div class="tools">
           <select id="funnel" aria-label="Selecionar funil"></select>
-          <input id="search" type="search" placeholder="Buscar lead, protocolo ou cidade" aria-label="Buscar lead, protocolo ou cidade">
+          <div class="searchWrap"><input id="search" type="search" placeholder="Buscar cliente, código ou lead" aria-label="Buscar cliente, código ou lead"><div class="customerSearchResults" id="customerSearchResults" hidden></div></div>
           <button class="button secondary" id="exportBtn" title="Baixar relatório em CSV">Exportar CSV</button>
           <button class="button secondary" id="refresh" title="Atualizar dados">Atualizar</button>
           <span class="sessionUser" id="sessionUser"></span>
@@ -78,6 +79,7 @@
         </div>
       </header>
       <section class="kpis" id="kpis" aria-label="Indicadores do CRM"></section>
+      <section class="reactivationAlerts" id="reactivationAlerts" aria-live="polite" hidden></section>
       <section class="board view active" id="board" aria-label="Quadro de oportunidades"></section>
       <section class="admin view" id="admin" aria-label="Equipe e rotas">
         <div class="adminIntro"><h2>Equipe e roteamento</h2><p>Cadastre colaboradores e defina quais atendimentos e regiões ficam com cada pessoa.</p></div>
@@ -104,6 +106,16 @@
             <div class="tableScroll"><table><thead><tr><th>Colaborador</th><th>Acesso</th><th>Especialidade</th><th>Rotas ativas</th><th>Ações</th></tr></thead><tbody id="sellerRows"></tbody></table></div>
           </div>
         </div>
+        <section class="importBox" id="customerImportPanel" aria-label="Importar cadastro de clientes" hidden>
+          <h2>Importar cadastro de clientes</h2>
+          <p>Gere a prévia dos dois arquivos e confira as quantidades antes de confirmar. O histórico só será associado quando o nome normalizado do cliente coincidir com um único registro; nomes ambíguos ou sem correspondência ficam sem vínculo. Nenhuma linha pessoal é exibida na prévia.</p>
+          <div class="importFiles">
+            <label for="inactiveWorkbook">Cadastro principal — Clientes Inativos.xlsx<input id="inactiveWorkbook" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
+            <label for="productionWorkbook">Histórico — Gestão da Produção.xlsx (opcional)<input id="productionWorkbook" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
+          </div>
+          <div class="importActions"><button class="button secondary" id="previewImport">Gerar prévia</button><button class="button" id="commitImport" disabled>Confirmar importação</button></div>
+          <div class="importStatus" id="importStatus" role="status" aria-live="polite"></div>
+        </section>
       </section>
     </main>
   </div>
@@ -114,12 +126,16 @@
       <footer class="dialogFooter"><button class="button secondary" id="discardClose">Fechar sem salvar</button><button class="button" id="saveCase">Salvar e fechar</button></footer>
     </div>
   </dialog>
+  <dialog class="customerDialog" id="customerDialog" aria-labelledby="customerDialogTitle">
+    <header class="customerDialogHeader"><div><h2 id="customerDialogTitle">Ficha do cliente</h2><div class="sub" id="customerDialogCode"></div></div><button class="button secondary" id="closeCustomerDialog" type="button">Fechar</button></header>
+    <div class="customerDialogBody" id="customerDialogBody"></div>
+  </dialog>
   <script>
     if (new URLSearchParams(location.search).has('password') || new URLSearchParams(location.search).has('username')) {
       history.replaceState(null, '', location.pathname + location.hash);
     }
     const api = location.origin;
-    const state = { funnels: [], board: null, active: null, dragged: null, query: "", selected: null, sellers: [], authToken: "", user: null, authRevision: 0 };
+    const state = { funnels: [], board: null, active: null, dragged: null, query: "", selected: null, sellers: [], authToken: "", user: null, authRevision: 0, searchRevision: 0, customerImportToken: "" };
     const $ = (id) => document.getElementById(id);
     const say = (m) => { const el = $('status'); el.textContent = m; el.dataset.state = String(m).startsWith('Erro:') ? 'error' : 'ok'; };
     async function json(path, opts) {
@@ -175,9 +191,10 @@
       $('loginScreen').hidden = true;
       $('sessionUser').textContent = session.user.name || session.user.email;
       $('navAdmin').hidden = !['admin', 'supervisor'].includes(session.user.role);
+      $('customerImportPanel').hidden = !['admin', 'supervisor'].includes(session.user.role);
       await loadFunnels();
       if (!state.authToken || revision !== state.authRevision) return;
-      await Promise.all([loadBoard(), loadKpis()]);
+      await Promise.all([loadBoard(), loadKpis(), loadReactivationAlerts()]);
     }
     $('loginForm').addEventListener('submit', async ev => {
       ev.preventDefault();
@@ -255,6 +272,7 @@
       return `<article class="card" draggable="true" tabindex="0" role="button" aria-label="Abrir lead ${escapeHtml(name)}" data-case-id="${card.id}">
         <b>${escapeHtml(name)}</b>
         <div class="line">${escapeHtml(card.protocol || '')} · ${escapeHtml(card.status || '')}</div>
+        <div class="line">Vendedor: ${escapeHtml(card.owner?.name || 'Sem responsável')}</div>
         <div class="line">${escapeHtml(f.city || '')}${f.uf ? '/' + escapeHtml(f.uf) : ''} · ${escapeHtml(f.segment || 'Sem segmento')}</div>
         <div class="line">${escapeHtml(f.need || 'Sem resumo')}</div>
         <div class="tags"><span class="tag status">${escapeHtml(f.stage || 'Etapa')}</span><span class="tag hot">${escapeHtml(f.temperature || 'Temp.')}</span><span class="tag">${escapeHtml(f.potential || 'Potencial')}</span></div>
@@ -275,6 +293,13 @@
       const labels = { low: 'Baixo', medium: 'Médio', high: 'Alto', key_account: 'Conta-chave', hot: 'Quente', warm: 'Morno', cold: 'Frio' };
       const emptyOption = `<option value=""${selected ? '' : ' selected'}>Não definido</option>`;
       return `<div class="editField${full ? ' full' : ''}"><label for="${id}">${label}</label><select id="${id}">${emptyOption}${values.map(value => `<option value="${escapeHtml(value)}"${value === selected ? ' selected' : ''}>${escapeHtml(labels[value] || value)}</option>`).join('')}</select></div>`;
+    }
+    function stageOptions(card) {
+      return state.funnels.flatMap(funnel => (funnel.stages || []).map(stage => ({
+        id: stage.id,
+        label: `${funnel.name} · ${stage.name}`,
+        selected: funnel.name === card.fields?.pipeline && stage.name === card.fields?.stage
+      })));
     }
     function closeDrawer() {
       if ($('drawer').open) $('drawer').close();
@@ -299,15 +324,19 @@
           ${editSelect('Temperatura', 'editTemperature', f.temperature, ['hot','warm','cold'])}
           ${editField('Valor estimado', 'editSaleValue', f.saleValue)}
           <div class="editField full"><label for="editNeed">Necessidade / resumo</label><textarea id="editNeed">${escapeHtml(f.need || '')}</textarea></div>
-          <div class="editField full"><label>Funil e etapa</label><div class="kv"><span>${escapeHtml(f.pipeline || '-')}</span><span>${escapeHtml(f.stage || '-')} · Responsável: ${escapeHtml(card.owner?.name || '-')}</span></div></div>
+          <div class="editField full"><label>Funil e etapa atuais</label><div class="kv"><span>${escapeHtml(f.pipeline || '-')}</span><span>${escapeHtml(f.stage || '-')} · Responsável: ${escapeHtml(card.owner?.name || '-')}</span></div></div>
         </div>` +
-      `<div class="panel"><h2>Follow-up</h2><div class="row"><input id="taskTitle" placeholder="Tarefa"><input id="taskDue" type="datetime-local"></div><div class="actions"><button id="addTask">Agendar</button></div></div>
+      `<div class="panel"><h2>Ciclo do cliente</h2><p class="muted">Mova esta mesma ficha entre vendas, pós-venda e reativação, sem criar outro cliente.</p><div class="row"><select id="moveStage">${stageOptions(card).map(option => `<option value="${escapeHtml(option.id)}"${option.selected ? ' selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}</select></div><div class="actions"><button id="moveStageButton" class="secondary">Mover para funil/etapa</button></div></div>
+       <div class="panel"><h2>Reativação</h2><p class="muted">A data da última compra inicia o prazo; ao registrar um contato, a contagem reinicia. O lembrete fica com o vendedor no 60º dia sem atividade, 30 dias antes do limite de 90 dias.</p><div class="actions"><button id="recordContact" class="secondary">Registrar contato e reiniciar prazo</button></div><div class="muted">Data-base: ${escapeHtml(card.reactivation_reference_at ? new Date(card.reactivation_reference_at).toLocaleString('pt-BR') : 'não definida')} · Origem: ${escapeHtml(card.reactivation_reference_source === 'purchase' ? 'última compra importada' : card.reactivation_reference_source === 'contact' ? 'contato registrado no CRM' : 'sem referência')}</div><div class="muted">Último contato registrado: ${escapeHtml(card.last_contact_at ? new Date(card.last_contact_at).toLocaleString('pt-BR') : 'nenhum')}</div></div>
+       <div class="panel"><h2>Follow-up</h2><div class="row"><input id="taskTitle" placeholder="Tarefa"><input id="taskDue" type="datetime-local"></div><div class="actions"><button id="addTask">Agendar</button></div></div>
        <div class="panel"><h2>Nota interna</h2><textarea id="noteBody" placeholder="Nao vai para o WhatsApp"></textarea><div class="actions"><button id="addNote" class="secondary">Salvar nota</button></div></div>
        <div class="panel"><h2>Transferir</h2><div class="row"><input id="transferName" placeholder="Novo responsavel"><input id="transferPhone" placeholder="+5511999990001"></div><div class="actions"><button id="transferLead" class="secondary">Criar transferencia</button><button id="queueMessage" class="secondary">Preparar mensagem</button></div></div>
        <div class="panel"><h2>Fechamento</h2><div class="row"><input id="saleValue" placeholder="Valor venda"><select id="lossReason"><option>Preco</option><option>Disponibilidade de Estoque</option><option>Condicao de Pagamento</option><option>Logistica</option><option>Outro</option></select></div><input id="lossDetail" placeholder="Detalhe perda, se houver" style="width:100%;margin-top:8px"><div class="actions"><button id="markWon">Venda ganha</button><button id="markLost" class="danger">Venda perdida</button></div></div>`
       ].join('');
       if (!$('drawer').open) $('drawer').showModal();
       $('addTask').onclick = addTask;
+      $('moveStageButton').onclick = moveSelectedStage;
+      $('recordContact').onclick = recordCustomerContact;
       $('addNote').onclick = addNote;
       $('transferLead').onclick = transferLead;
       $('queueMessage').onclick = queueMessage;
@@ -354,8 +383,28 @@
     async function moveCard(caseId, stageId) {
       say('Movendo lead...');
       await json(`/v1/cases/${encodeURIComponent(caseId)}/stage`, { method: 'POST', body: JSON.stringify({ stageId }) });
+      const destination = state.funnels.find(funnel => (funnel.stages || []).some(stage => stage.id === stageId));
+      if (destination && destination.id !== state.active) {
+        state.active = destination.id;
+        renderFunnels();
+      }
       await loadBoard();
       say('Lead movido.');
+    }
+    async function moveSelectedStage() {
+      if (!state.selected) return;
+      await moveCard(state.selected.id, $('moveStage').value);
+      closeDrawer();
+      await loadKpis();
+      say('Ficha movida; vendedor e histórico preservados.');
+    }
+    async function recordCustomerContact() {
+      if (!state.selected) return;
+      const result = await json(`/v1/cases/${encodeURIComponent(state.selected.id)}/contact`, { method: 'POST', body: '{}' });
+      state.selected.last_contact_at = result.last_contact_at;
+      await Promise.all([loadReactivationAlerts(), loadKpis()]);
+      openCard(state.selected);
+      say('Contato registrado; lembrete programado para o 60º dia.');
     }
     async function addTask() {
       if (!state.selected) return;
@@ -431,6 +480,70 @@
       renderSellers();
       say('Colaboradores atualizados.');
     }
+    async function uploadCustomerWorkbook(kind, file, token) {
+      const headers = {
+        authorization: `Bearer ${state.authToken}`,
+        'content-type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      };
+      if (token) headers['x-import-token'] = token;
+      const response = await fetch(`${api}/v1/import/customer-registry/preview?kind=${encodeURIComponent(kind)}`, {
+        method: 'POST',
+        headers,
+        body: file
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || response.statusText);
+      return data;
+    }
+    async function previewCustomerImport() {
+      const customerFile = $('inactiveWorkbook').files[0];
+      const productionFile = $('productionWorkbook').files[0];
+      const status = $('importStatus');
+      $('commitImport').disabled = true;
+      state.customerImportToken = '';
+      if (!customerFile) {
+        status.textContent = 'Selecione o arquivo Clientes Inativos.xlsx para gerar a prévia.';
+        return;
+      }
+      $('previewImport').disabled = true;
+      status.textContent = 'Lendo os arquivos e preparando uma prévia sem exibir dados pessoais...';
+      try {
+        const master = await uploadCustomerWorkbook('inactive', customerFile);
+        state.customerImportToken = master.token;
+        let detail = `Cadastro principal: ${master.preview.customers.toLocaleString('pt-BR')} clientes; ${master.preview.duplicateSourceCodes.toLocaleString('pt-BR')} códigos repetidos ignorados.`;
+        if (productionFile) {
+          const history = await uploadCustomerWorkbook('production', productionFile, state.customerImportToken);
+          detail += ` Histórico: ${history.preview.historyRows.toLocaleString('pt-BR')} linhas; ${history.preview.exactUniqueNames.toLocaleString('pt-BR')} nomes com correspondência única na prévia; ${history.preview.ambiguousNames.toLocaleString('pt-BR')} ambíguos; ${history.preview.unmatchedNames.toLocaleString('pt-BR')} sem correspondência.`;
+        }
+        status.textContent = `${detail} Revise e confirme para gravar no banco.`;
+        $('commitImport').disabled = false;
+      } catch (error) {
+        state.customerImportToken = '';
+        status.textContent = `Não foi possível preparar a prévia: ${error.message}`;
+      } finally {
+        $('previewImport').disabled = false;
+      }
+    }
+    async function commitCustomerImport() {
+      if (!state.customerImportToken) return;
+      $('commitImport').disabled = true;
+      $('previewImport').disabled = true;
+      $('importStatus').textContent = 'Importando em transação; não feche esta tela...';
+      try {
+        const result = await json('/v1/import/customer-registry/commit', {
+          method: 'POST',
+          body: JSON.stringify({ token: state.customerImportToken })
+        });
+        state.customerImportToken = '';
+        $('importStatus').textContent = `Importação concluída: ${result.totalCustomers.toLocaleString('pt-BR')} registros; ${result.imported.toLocaleString('pt-BR')} novos; ${result.updated.toLocaleString('pt-BR')} atualizados; ${result.historyLinked.toLocaleString('pt-BR')} históricos vinculados; ${result.historyAmbiguous.toLocaleString('pt-BR')} ambíguos e ${result.historyUnmatched.toLocaleString('pt-BR')} sem vínculo.`;
+        await Promise.all([loadBoard(), loadKpis(), loadReactivationAlerts()]);
+      } catch (error) {
+        $('importStatus').textContent = `Importação não concluída: ${error.message}`;
+      } finally {
+        $('commitImport').disabled = !state.customerImportToken;
+        $('previewImport').disabled = false;
+      }
+    }
     function fillSeller(profileId) {
       const s = state.sellers.find(item => item.profile_id === profileId);
       if (!s) return;
@@ -495,6 +608,87 @@
       renderBoard();
       say('Atualizado.');
     }
+    async function loadReactivationAlerts() {
+      const container = $('reactivationAlerts');
+      const data = await json('/v1/tasks?kind=reactivation');
+      const due = (data.items || []).filter(task => task.status === 'open' && task.due_at && new Date(task.due_at).getTime() <= Date.now());
+      container.hidden = due.length === 0;
+      if (!due.length) return;
+      container.innerHTML = `<h2>Clientes para reativar (${due.length})</h2>${due.map(task => {
+        const dueAt = new Date(task.due_at);
+        const daysOverdue = Math.max(0, Math.floor((Date.now() - dueAt.getTime()) / 86400000));
+        return `<div class="reactivationAlert"><button type="button" data-reactivation-case="${escapeHtml(task.case_id)}">${escapeHtml(task.contact_name || 'Cliente')} · ${escapeHtml(task.assignee_name || 'Sem vendedor responsável')}</button><span>${daysOverdue ? `Atrasado há ${daysOverdue} dia(s)` : 'Aviso de reativação'}</span></div>`;
+      }).join('')}`;
+      container.querySelectorAll('[data-reactivation-case]').forEach(button => {
+        button.onclick = async () => {
+          const result = await json(`/v1/cases/${encodeURIComponent(button.dataset.reactivationCase)}`);
+          openCard(result.case);
+        };
+      });
+    }
+    function renderCustomerSearchResults(items, query) {
+      const container = $('customerSearchResults');
+      if (!query || query.length < 2) {
+        container.hidden = true;
+        container.replaceChildren();
+        return;
+      }
+      if (!items.length) {
+        container.innerHTML = '<div class="searchHint">Nenhum cliente encontrado no cadastro.</div>';
+        container.hidden = false;
+        return;
+      }
+      container.innerHTML = items.map((customer, index) => `<button type="button" class="customerResult" data-customer-index="${index}"><b>${escapeHtml(customer.name || 'Cliente sem nome')}</b><span>${escapeHtml(customer.customer_code)} · ${escapeHtml(customer.city || customer.profile?.city || 'Sem cidade')}${customer.uf || customer.profile?.state ? '/' + escapeHtml(customer.uf || customer.profile?.state) : ''} · ${escapeHtml(customer.case_count || 0)} ficha(s)</span></button>`).join('');
+      container.hidden = false;
+      container.querySelectorAll('[data-customer-index]').forEach(button => {
+        button.onclick = () => {
+          const customer = items[Number(button.dataset.customerIndex)];
+          container.hidden = true;
+          openCustomerDetails(customer);
+        };
+      });
+    }
+    async function searchCustomerRegistry(query) {
+      const revision = ++state.searchRevision;
+      if (query.trim().length < 2) {
+        renderCustomerSearchResults([], '');
+        return;
+      }
+      await new Promise(resolve => setTimeout(resolve, 180));
+      if (revision !== state.searchRevision) return;
+      const data = await json(`/v1/customers?q=${encodeURIComponent(query.trim())}`);
+      if (revision === state.searchRevision) renderCustomerSearchResults(data.items || [], query.trim());
+    }
+    async function openCustomerDetails(customer) {
+      const profile = customer.profile || {};
+      const data = await json(`/v1/cases?customer_code=${encodeURIComponent(customer.customer_code)}`);
+      const fields = [
+        ['Código ABR', customer.customer_code],
+        ['Código de origem', profile.sourceCustomerCode],
+        ['Telefone', customer.phone || '—'],
+        ['E-mail', profile.email || '—'],
+        ['Cidade / UF', [customer.city || profile.city, customer.uf || profile.state].filter(Boolean).join('/') || '—'],
+        ['Vendedor cadastrado', profile.seller || '—'],
+        ['Segmento', profile.segment || '—'],
+        ['Região', profile.region || '—'],
+        ['Limite de crédito', profile.creditLimit == null ? '—' : Number(profile.creditLimit).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })],
+        ['Dias desde a última venda', profile.daysSinceLastSale ?? '—'],
+        ['Pedidos no histórico importado', customer.order_count || 0],
+        ['Faturamento importado', Number(customer.total_sales || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })],
+        ['Última compra registrada', customer.last_purchase_at ? new Date(customer.last_purchase_at).toLocaleDateString('pt-BR') : '—']
+      ];
+      $('customerDialogTitle').textContent = customer.name || 'Ficha do cliente';
+      $('customerDialogCode').textContent = `Código ABR ${customer.customer_code}`;
+      $('customerDialogBody').innerHTML = `<div class="customerDetailsGrid">${fields.map(([label, value]) => `<div class="customerDetail"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`).join('')}</div><h3>Fichas e atendimentos</h3>${(data.items || []).map(item => `<button type="button" class="customerCase" data-open-case="${escapeHtml(item.id)}">${escapeHtml(item.fields?.pipeline || 'Funil')} · ${escapeHtml(item.fields?.stage || 'Etapa')} · ${escapeHtml(item.owner?.name || 'Sem vendedor')}</button>`).join('') || '<div class="searchHint">Este cliente ainda não possui fichas no funil.</div>'}`;
+      $('customerDialogBody').querySelectorAll('[data-open-case]').forEach(button => {
+        button.onclick = async () => {
+          const result = await json(`/v1/cases/${encodeURIComponent(button.dataset.openCase)}`);
+          $('customerDialog').close();
+          openCard(result.case);
+        };
+      });
+      if (!$('customerDialog').open) $('customerDialog').showModal();
+    }
     function escapeHtml(s) {
       return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
@@ -503,9 +697,14 @@
     $('railRefresh').onclick = $('refresh').onclick;
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && state.active) {
-        Promise.all([loadBoard(), loadKpis()]).catch(err => say('Erro ao atualizar o Kanban: ' + err.message));
+        Promise.all([loadBoard(), loadKpis(), loadReactivationAlerts()]).catch(err => say('Erro ao atualizar o Kanban: ' + err.message));
       }
     });
+    setInterval(() => {
+      if (state.authToken && document.visibilityState === 'visible') {
+        loadReactivationAlerts().catch(err => say('Erro ao carregar lembretes: ' + err.message));
+      }
+    }, 60000);
     $('navBoard').onclick = () => showView('board');
     $('navAdmin').onclick = () => showView('admin');
     $('exportBtn').onclick = async () => {
@@ -525,7 +724,15 @@
     };
     $('saveSeller').onclick = saveSeller;
     $('clearSeller').onclick = clearSellerForm;
-    $('search').oninput = () => { state.query = $('search').value; renderBoard(); };
+    $('search').oninput = () => {
+      state.query = $('search').value;
+      renderBoard();
+      searchCustomerRegistry(state.query).catch(err => say('Erro na busca do cadastro: ' + err.message));
+    };
+    $('closeCustomerDialog').onclick = () => $('customerDialog').close();
+    $('customerDialog').addEventListener('click', ev => { if (ev.target === $('customerDialog')) $('customerDialog').close(); });
+    $('previewImport').onclick = previewCustomerImport;
+    $('commitImport').onclick = commitCustomerImport;
     $('close').onclick = closeDrawer;
     $('discardClose').onclick = closeDrawer;
     $('saveCase').onclick = saveCase;

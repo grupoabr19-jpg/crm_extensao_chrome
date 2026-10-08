@@ -59,6 +59,21 @@ Rode as migrations manualmente pelo Shell do Render, ou localmente apontando par
 npm run db:migrate
 ```
 
+### Cadastro, importação e reativação
+
+A migration `0006_customer_import_lifecycle` cria os vínculos de origem, o resumo de compras e os campos necessários para os lembretes. Aplique-a antes de usar a nova importação.
+
+Administradores e supervisores podem abrir **Equipe e roteamento → Importar cadastro de clientes**:
+
+1. Selecione `Clientes Inativos.xlsx` como cadastro principal; `Gestão da Produção.xlsx` é opcional.
+2. Gere e revise a prévia agregada antes de confirmar. A prévia não exibe nomes, telefones nem outras linhas de clientes.
+3. O código ERP original fica associado ao cadastro e cada ficha continua recebendo seu código ABR `C` + 8 dígitos.
+4. O histórico de produção só é associado por nome normalizado quando há exatamente um cliente correspondente. Registros ambíguos ou sem correspondência ficam sem vínculo.
+
+Os arquivos são aceitos até 50 MiB. A prévia fica temporariamente em memória por 30 minutos; se expirar ou o serviço reiniciar, basta carregá-los novamente. A confirmação grava o cadastro, identificadores, resumo agregado de compras e fichas em uma transação.
+
+No card, **Registrar contato e reiniciar prazo** grava a data real do contato e agenda a tarefa do vendedor para 60 dias depois. Para fichas associadas a histórico importado, a última compra é a referência inicial. O CRM mostra os lembretes vencidos/prontos para ação enquanto estiver aberto; as conversas do WhatsApp ainda não atualizam essa data automaticamente, então o atendente deve registrar o contato no card.
+
 Nao separe em uma API de funil e outra de storage neste momento. O desenho atual mantem um unico backend de autorizacao/regras e o Neon como armazenamento central. Separar servicos passa a fazer sentido quando houver carga, times ou limites de seguranca diferentes.
 
 Antes de producao, ajuste:
@@ -76,11 +91,16 @@ Antes de producao, ajuste:
 - `GET /v1/sellers`: vendedores/perfis/rotas de atendimento.
 - `POST /v1/sellers`: cadastrar ou atualizar vendedor, funcao comercial e rotas.
 - `DELETE /v1/sellers/:id`: retirar colaborador ativo do roteamento.
+- `GET /v1/customers`: buscar todos os clientes cadastrados por nome ou código.
+- `POST /v1/import/customer-registry/preview?kind=inactive|production`: prévia temporária dos arquivos XLSX (admin/supervisor; enviar binário; o segundo arquivo usa `x-import-token`).
+- `POST /v1/import/customer-registry/commit`: confirmar uma prévia (admin/supervisor).
 - `GET /v1/funnels`: funis e etapas.
 - `GET /v1/funnels/:id/board`: Kanban de um funil.
-- `POST /v1/cases/:id/stage`: mover lead de etapa.
+- `GET /v1/cases/:id`: consultar uma ficha.
+- `POST /v1/cases/:id/stage`: mover a mesma ficha entre etapas/funis.
+- `POST /v1/cases/:id/contact`: registrar contato e programar reativação.
 - `POST /v1/cases/:id/tasks`: criar follow-up.
-- `GET /v1/tasks`: listar follow-ups.
+- `GET /v1/tasks`: listar follow-ups e avisos de reativação.
 - `POST /v1/cases/:id/notes`: criar nota interna.
 - `POST /v1/cases/:id/close`: venda ganha/perdida.
 - `POST /v1/cases/:id/transfer`: nova transferencia entre numeros.
