@@ -22,12 +22,40 @@ O CRM web tambem e servido pela API em `/crm`. Esta tela abre fora do WhatsApp e
 
 ## Render
 
-O Blueprint em `../render.yaml` sobe um unico Web Service:
+Contas gratuitas do Render podem nao liberar Blueprints. Use o fluxo manual de **Web Service** apontando para o GitHub:
+
+```text
+New + -> Web Service
+Repository: https://github.com/grupoabr19-jpg/crm_extensao_chrome.git
+Name: abr-crm-api
+Runtime: Node
+Branch: master
+Root Directory: abr-crm
+Build Command: npm ci
+Start Command: npm run api:start
+Instance Type: Free
+Health Check Path: /healthz
+```
+
+Depois do primeiro deploy, abra:
+
+```text
+https://SEU-SERVICO.onrender.com/healthz
+https://SEU-SERVICO.onrender.com/crm
+```
+
+O Web Service unico entrega:
 
 - API CRM (`/v1/*`);
 - Kanban web (`/crm`);
 - healthcheck (`/healthz`);
 - readiness com banco (`/readyz`).
+
+Rode as migrations manualmente pelo Shell do Render, ou localmente apontando para `DATABASE_URL_UNPOOLED`, antes de usar o CRM em producao:
+
+```bash
+npm run db:migrate
+```
 
 Nao separe em uma API de funil e outra de storage neste momento. O desenho atual mantem um unico backend de autorizacao/regras e o Neon como armazenamento central. Separar servicos passa a fazer sentido quando houver carga, times ou limites de seguranca diferentes.
 
