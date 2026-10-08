@@ -336,6 +336,11 @@
     $('funnel').onchange = async () => { state.active = $('funnel').value; await loadBoard(); };
     $('refresh').onclick = async () => { await loadFunnels(); await loadBoard(); };
     $('railRefresh').onclick = $('refresh').onclick;
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && state.active) {
+        loadBoard().catch(err => say('Erro ao atualizar o Kanban: ' + err.message));
+      }
+    });
     $('navBoard').onclick = () => showView('board');
     $('navAdmin').onclick = () => showView('admin');
     $('exportBtn').onclick = () => { location.href = api + '/v1/reports/cases.csv'; };

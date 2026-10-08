@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CRM ABR",
-  "version": "1.2.0",
+  "version": "1.4.0",
   "description": "Barra lateral do CRM Grupo ABR integrada ao WhatsApp Web.",
   "minimum_chrome_version": "116",
   "permissions": ["storage"],
@@ -16,6 +16,12 @@
       "matches": ["https://web.whatsapp.com/*"],
       "js": ["panel.js"],
       "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["brand-logo.png"],
+      "matches": ["https://web.whatsapp.com/*"]
     }
   ],
   "action": {

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { pgSslConfig } from "./env.mjs";
 
 const { Pool } = pg;
+const DEFAULT_EMPLOYEE_PASSWORD = "ABR@2026";
 
 export function normalizePhone(raw) {
   const original = String(raw || "").trim();
@@ -240,7 +241,7 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
     authenticateUser: async (body) => {
       const email = String(body.email || body.login || "").trim().toLowerCase();
       const password = String(body.password || "");
-      if (!email || password !== "ABR@2026") return { error: "invalid_credentials" };
+      if (!email || password !== DEFAULT_EMPLOYEE_PASSWORD) return { error: "invalid_credentials" };
       const user = db.users.find((item) => String(item.email || "").toLowerCase() === email || `${String(item.login || "").toLowerCase()}@grupoabr.com.br` === email);
       if (!user) return { error: "invalid_credentials" };
       return { user };
@@ -788,7 +789,10 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
         ? requestedRole
         : (salesFunction === "adm_sdr" ? "admin" : "seller");
       const user = await ensureUser(ctx.org.id, email, displayName, role);
-      await pool.query("update users set display_name=$2, role=$3, status='active' where id=$1", [user.id, displayName, role]);
+      await pool.query(
+        "update users set display_name=$2, role=$3, status='active', password_hash=coalesce(password_hash, crypt($4, gen_salt('bf'))) where id=$1",
+        [user.id, displayName, role, DEFAULT_EMPLOYEE_PASSWORD]
+      );
       const whatsapp = normalizePhone(body.whatsapp || body.whatsapp_e164 || "");
       const profile = await one(`
         insert into seller_profiles(organization_id,user_id,profile_title,sales_function,whatsapp_e164,active)
