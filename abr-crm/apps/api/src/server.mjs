@@ -209,6 +209,19 @@ async function handler(req, res) {
       return send(res, 200, await storage.simulateRouting(body));
     }
 
+    if (req.method === "GET" && url.pathname === "/v1/sellers") {
+      await storage.ready();
+      return send(res, 200, await storage.listSellers());
+    }
+
+    if (req.method === "POST" && url.pathname === "/v1/sellers") {
+      const body = await readBody(req);
+      await storage.ready();
+      const result = await storage.createSeller(body);
+      if (result.error) return send(res, 422, result);
+      return send(res, 201, result);
+    }
+
     if (req.method === "POST" && url.pathname === "/v1/cases") {
       const body = await readBody(req);
       await storage.ready();

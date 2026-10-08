@@ -70,6 +70,8 @@ Antes de producao, ajuste:
 - `GET /crm`: Kanban externo do CRM.
 - `POST /v1/ai/test`: teste protegido de conectividade com a IA.
 - `POST /v1/tests/transfer`: cria um lead de teste e prepara handoff/outbox para validar transferencia entre numeros.
+- `GET /v1/sellers`: vendedores/perfis/rotas de atendimento.
+- `POST /v1/sellers`: cadastrar ou atualizar vendedor, funcao comercial e rotas.
 - `GET /v1/funnels`: funis e etapas.
 - `GET /v1/funnels/:id/board`: Kanban de um funil.
 - `POST /v1/cases/:id/stage`: mover lead de etapa.

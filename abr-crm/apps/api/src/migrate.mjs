@@ -47,6 +47,9 @@ try {
   await applyMigration("0002_crm_operations", async () => {
     await client.query(readFileSync(resolve(migrationsDir, "0002_crm_operations.sql"), "utf8"));
   });
+  await applyMigration("0003_sellers_routes", async () => {
+    await client.query(readFileSync(resolve(migrationsDir, "0003_sellers_routes.sql"), "utf8"));
+  });
   await client.query("commit");
   console.log("Migrations concluidas.");
 } catch (err) {

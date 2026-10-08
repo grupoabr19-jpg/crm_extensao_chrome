@@ -44,6 +44,117 @@ function toCsv(rows) {
   return rows.map((row) => row.map((cell) => `"${String(cell ?? "").replaceAll('"', '""')}"`).join(",")).join("\n");
 }
 
+function normalizeText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toUpperCase();
+}
+
+function dddFromPhone(raw) {
+  const phone = normalizePhone(raw || "");
+  if (!phone.ok) return null;
+  const digits = phone.e164.replace(/\D/g, "");
+  return digits.startsWith("55") && digits.length >= 12 ? digits.slice(2, 4) : null;
+}
+
+function inferSalesFunction(input) {
+  const explicit = String(input.salesFunction || input.sellerFunction || "").trim().toLowerCase();
+  const allowed = new Set(["adm_sdr", "vendedor_externo", "especialista", "corporativo", "construcao_civil"]);
+  if (allowed.has(explicit)) return explicit;
+  const text = normalizeText([input.segment, input.department, input.need, input.pipeline].filter(Boolean).join(" "));
+  if (/(CONSTRUCAO|CONSTRUTORA|OBRA|CIVIL|ENGENHARIA)/.test(text)) return "construcao_civil";
+  if (/(CORPORATIVO|INDUSTRIA|INDUSTRIAL|TRANSPORTE|MANUTENCAO)/.test(text)) return "corporativo";
+  if (/(ESPECIALISTA|TECNICO|TECNICA|PROJETO)/.test(text)) return "especialista";
+  return "vendedor_externo";
+}
+
+const CITY_REGION = new Map(Object.entries({
+  ATIBAIA: "BRAGANCA",
+  PIRACAIA: "BRAGANCA",
+  "BOM JESUS DOS PERDOES": "BRAGANCA",
+  JOANOPOLIS: "BRAGANCA",
+  VARGEM: "BRAGANCA",
+  "NAZARE PAULISTA": "BRAGANCA",
+  MAIRIPORA: "BRAGANCA",
+  ITATIBA: "JUNDIAI",
+  JARINU: "JUNDIAI",
+  "VARZEA PAULISTA": "JUNDIAI",
+  "CAMPO LIMPO": "JUNDIAI",
+  ITUPEVA: "JUNDIAI",
+  CAJAMAR: "JUNDIAI",
+  VINHEDO: "JUNDIAI",
+  "TRES PONTAS": "VARGINHA",
+  "TRES CORACOES": "VARGINHA",
+  "ELOI MENDES": "VARGINHA",
+  PARAGUACU: "VARGINHA",
+  "MONSENHOR PAULO": "VARGINHA",
+  CAMPANHA: "VARGINHA",
+  CAMBUQUIRA: "VARGINHA",
+  "SAO GONCALO": "VARGINHA",
+  CAREACU: "VARGINHA",
+  COQUEIRAL: "VARGINHA",
+  "SANTANA DA VARGEM": "VARGINHA",
+  JACUTINGA: "POUSO ALEGRE",
+  "BORDA DA MATA": "POUSO ALEGRE",
+  "BUENO BRANDAO": "POUSO ALEGRE",
+  LAMBARI: "POUSO ALEGRE",
+  CAXAMBU: "POUSO ALEGRE",
+  "SAO LOURENCO": "POUSO ALEGRE",
+  "SAO SEBASTIAO DA BELA VISTA": "POUSO ALEGRE",
+  NATERCIA: "POUSO ALEGRE",
+  HELIODORA: "POUSO ALEGRE",
+  "OURO FINO": "POUSO ALEGRE",
+  BAEPENDI: "POUSO ALEGRE",
+  "CARMO DE MINAS": "POUSO ALEGRE",
+  "MONTE SIAO": "POUSO ALEGRE",
+  INCONFIDENTES: "POUSO ALEGRE",
+  "CONCEICAO DO RIO VERDE": "POUSO ALEGRE",
+  ALFENAS: "POCOS DE CALDAS",
+  MACHADO: "POCOS DE CALDAS",
+  CALDAS: "POCOS DE CALDAS",
+  "SANTA RITA DE CALDAS": "POCOS DE CALDAS",
+  CONGONHAL: "POCOS DE CALDAS",
+  "POCO FUNDO": "POCOS DE CALDAS",
+  SILVIANOPOLIS: "POCOS DE CALDAS",
+  FAMA: "POCOS DE CALDAS",
+  ANDRADAS: "POCOS DE CALDAS",
+  "CAMPOS GERAIS": "POCOS DE CALDAS",
+  IBITIURA: "POCOS DE CALDAS",
+  "SANTA RITA SAPUCAI": "ITAJUBA",
+  PIRANGUINHO: "ITAJUBA",
+  "MARIA DA FE": "ITAJUBA",
+  PEDRALVA: "ITAJUBA",
+  VIRGINIA: "ITAJUBA",
+  "DELFIM MOREIRA": "ITAJUBA",
+  GONCALVES: "ITAJUBA",
+  "SAPUCAI MIRIM": "ITAJUBA",
+  "SAO BENTO": "ITAJUBA",
+  "CONCEICAO DOS OUROS": "ITAJUBA",
+  "CACHOEIRA DE MINAS": "ITAJUBA",
+  BRASOPOLIS: "ITAJUBA",
+  PARAISOPOLIS: "ITAJUBA",
+  "SAO JOSE DO ALEGRE": "ITAJUBA",
+  CONSOLACAO: "ITAJUBA",
+  TOLEDO: "EXTREMA",
+  MUNHOZ: "EXTREMA",
+  "PEDRA BELA": "EXTREMA",
+  PINHALZINHO: "EXTREMA",
+  SOCORRO: "EXTREMA",
+  "SERRA NEGRA": "EXTREMA",
+  "BOM REPOUSO": "CAMBUI",
+  SENADOR: "CAMBUI",
+  ESTIVA: "CAMBUI",
+  CAMANDUCAIA: "CAMBUI",
+  ITAPEVA: "CAMBUI",
+  "CORREGO DO BOM JESUS": "CAMBUI"
+}));
+
+function inferRegion(input) {
+  return normalizeText(input.region || CITY_REGION.get(normalizeText(input.city)) || input.city);
+}
+
 export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessage }) {
   const db = {
     organization: { id: randomUUID(), name: "Grupo ABR MVP" },
@@ -51,6 +162,7 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
       { id: randomUUID(), name: "Triagem ABR", role: "sdr", phone: "+5511999990000", department: "Triagem" },
       { id: randomUUID(), name: "Vendedor ABR", role: "seller", phone: "+5511999990001", department: "Vendas" }
     ],
+    sellers: [],
     devices: [],
     cases: [],
     handoffs: [],
@@ -124,6 +236,20 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
     simulateRouting: async (body) => {
       const routed = routeLead(body);
       return { destination: routed.user, reason: routed.reason };
+    },
+    listSellers: async () => ({ items: db.sellers, total: db.sellers.length }),
+    createSeller: async (body) => {
+      const seller = {
+        id: randomUUID(),
+        name: String(body.name || body.displayName || "").slice(0, 120),
+        email: String(body.email || "").toLowerCase(),
+        sales_function: inferSalesFunction(body),
+        profile_title: body.profileTitle || body.profile_title || "Vendedor",
+        whatsapp_e164: normalizePhone(body.whatsapp || body.whatsapp_e164 || "").e164 || null,
+        routes: Array.isArray(body.routes) ? body.routes : []
+      };
+      db.sellers.unshift(seller);
+      return { seller };
     },
     createCase: async (body) => {
       const phone = normalizePhone(body.phone || "");
@@ -373,9 +499,64 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
     if (found) return found;
     return one("insert into user_account_bindings(organization_id,user_id,account_id,verified_at) values($1,$2,$3,now()) returning id", [orgId, userId, accountId]);
   }
+  async function findRoutedSeller(ctx, input) {
+    const channel = normalizeText(input.pipeline) === "ATACADO" ? "atacado" : "varejo";
+    const salesFunction = channel === "atacado" ? "vendedor_externo" : inferSalesFunction(input);
+    const routeType = channel === "atacado" ? "ddd" : "region";
+    const routeValue = channel === "atacado" ? (String(input.ddd || "").replace(/\D/g, "") || dddFromPhone(input.phone)) : inferRegion(input);
+    if (!routeValue) return null;
+    const row = await one(`
+      select sp.id profile_id, sp.profile_title, sp.sales_function, sp.whatsapp_e164,
+        u.id user_id, u.display_name seller_name, u.email,
+        sr.channel, sr.route_type, sr.route_value, sr.region, sr.priority
+      from seller_routes sr
+      join seller_profiles sp on sp.id=sr.profile_id
+      join users u on u.id=sp.user_id
+      where sr.organization_id=$1
+        and sr.active=true
+        and sp.active=true
+        and sr.channel=$2
+        and sr.sales_function=$3
+        and sr.route_type=$4
+        and lower(sr.route_value)=lower($5)
+      order by sr.priority, u.display_name
+      limit 1
+    `, [ctx.org.id, channel, salesFunction, routeType, routeValue]);
+    if (!row) return null;
+    return { ...row, channel, salesFunction, routeType, routeValue };
+  }
   async function ensureManualDestination(ctx, input) {
     const requested = normalizePhone(input.responsiblePhone || "");
     if (!requested.ok) {
+      const routed = await findRoutedSeller(ctx, input);
+      if (routed) {
+        const departmentName = routed.channel === "atacado" ? "Atacado" : "Vendas";
+        const department = await ensureDepartment(ctx.org.id, departmentName);
+        let account = ctx.sellerAccount;
+        let phone = ctx.sellerAccount.e164;
+        if (routed.whatsapp_e164) {
+          account = await ensureAccount(ctx.org.id, routed.whatsapp_e164, routed.seller_name, "employee");
+          await ensureBinding(ctx.org.id, routed.user_id, account.id);
+          phone = account.e164;
+        }
+        await ensureUserDepartment(routed.user_id, department.id);
+        return {
+          user: { id: routed.user_id, name: routed.seller_name, role: "seller" },
+          account,
+          department,
+          phone,
+          name: routed.seller_name,
+          departmentName,
+          route: {
+            channel: routed.channel,
+            sales_function: routed.salesFunction,
+            route_type: routed.routeType,
+            route_value: routed.routeValue,
+            region: routed.region
+          },
+          reason: `Roteamento ${routed.channel}: ${routed.salesFunction} / ${routed.routeType} ${routed.routeValue}`
+        };
+      }
       return {
         user: ctx.sellerUser,
         account: ctx.sellerAccount,
@@ -539,7 +720,76 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
     simulateRouting: async (body) => {
       const ctx = await ready();
       const routed = await ensureManualDestination(ctx, body);
-      return { destination: { id: routed.user.id, name: routed.name, phone: routed.phone, department: routed.departmentName }, reason: routed.reason };
+      return { destination: { id: routed.user.id, name: routed.name, phone: routed.phone, department: routed.departmentName }, route: routed.route || null, reason: routed.reason };
+    },
+    listSellers: async () => {
+      const ctx = await ready();
+      const rows = await many(`
+        select sp.id profile_id, u.id user_id, u.email, u.display_name name, u.role,
+          sp.profile_title, sp.sales_function, sp.whatsapp_e164, sp.active,
+          coalesce(json_agg(json_build_object(
+            'id', sr.id,
+            'channel', sr.channel,
+            'sales_function', sr.sales_function,
+            'route_type', sr.route_type,
+            'route_value', sr.route_value,
+            'region', sr.region,
+            'priority', sr.priority,
+            'active', sr.active
+          ) order by sr.channel, sr.sales_function, sr.priority, sr.route_value) filter (where sr.id is not null), '[]') routes
+        from seller_profiles sp
+        join users u on u.id=sp.user_id
+        left join seller_routes sr on sr.profile_id=sp.id
+        where sp.organization_id=$1
+        group by sp.id, u.id
+        order by sp.sales_function, u.display_name
+      `, [ctx.org.id]);
+      return { items: rows, total: rows.length };
+    },
+    createSeller: async (body) => {
+      const ctx = await ready();
+      const displayName = String(body.name || body.displayName || "").trim();
+      const email = String(body.email || "").trim().toLowerCase();
+      if (!displayName || !email) return { error: "missing_seller_identity" };
+      const salesFunction = inferSalesFunction(body);
+      const role = salesFunction === "adm_sdr" ? "admin" : "seller";
+      const user = await ensureUser(ctx.org.id, email, displayName, role);
+      await pool.query("update users set display_name=$2, role=$3, status='active' where id=$1", [user.id, displayName, role]);
+      const whatsapp = normalizePhone(body.whatsapp || body.whatsapp_e164 || "");
+      const profile = await one(`
+        insert into seller_profiles(organization_id,user_id,profile_title,sales_function,whatsapp_e164,active)
+        values($1,$2,$3,$4,$5,true)
+        on conflict (organization_id,user_id) do update
+          set profile_title=excluded.profile_title,
+              sales_function=excluded.sales_function,
+              whatsapp_e164=excluded.whatsapp_e164,
+              active=true
+        returning id, profile_title, sales_function, whatsapp_e164, active
+      `, [ctx.org.id, user.id, body.profileTitle || body.profile_title || "Vendedor", salesFunction, whatsapp.ok ? whatsapp.e164 : null]);
+      if (whatsapp.ok) {
+        const account = await ensureAccount(ctx.org.id, whatsapp.e164, displayName, "employee");
+        await ensureBinding(ctx.org.id, user.id, account.id);
+      }
+      if (Array.isArray(body.routes)) {
+        for (const route of body.routes) {
+          const channel = String(route.channel || "varejo").toLowerCase() === "atacado" ? "atacado" : "varejo";
+          const routeSalesFunction = inferSalesFunction({ salesFunction: route.salesFunction || route.sales_function || salesFunction });
+          const routeType = ["region", "city", "ddd"].includes(route.routeType || route.route_type) ? (route.routeType || route.route_type) : (channel === "atacado" ? "ddd" : "region");
+          const routeValue = normalizeText(route.routeValue || route.route_value || route.region || route.ddd || route.city);
+          if (!routeValue) continue;
+          await pool.query(`
+            insert into seller_routes(organization_id,profile_id,channel,sales_function,route_type,route_value,region,priority)
+            values($1,$2,$3,$4,$5,$6,$7,$8)
+          `, [ctx.org.id, profile.id, channel, routeSalesFunction, routeType, routeValue, route.region || null, Number(route.priority || 100)]);
+        }
+      }
+      const seller = await one(`
+        select sp.id profile_id, u.id user_id, u.email, u.display_name name, u.role,
+          sp.profile_title, sp.sales_function, sp.whatsapp_e164, sp.active
+        from seller_profiles sp join users u on u.id=sp.user_id
+        where sp.id=$1
+      `, [profile.id]);
+      return { seller };
     },
     createCase: async (body) => {
       const ctx = await ready();
