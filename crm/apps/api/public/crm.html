@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f7fb">
+  <title>Grupo ABR · CRM</title>
+  <style>
+    :root{color-scheme:light;--ink:#17243b;--muted:#718096;--line:#e5e9f0;--canvas:#f6f7fb;--paper:#fff;--navy:#172641;--navy-2:#203453;--orange:#ee8a22;--orange-dark:#cf6e0d;--green:#20835a;--red:#bd4c43;--shadow:0 8px 26px rgba(22,39,66,.06);--radius:14px}
+    *{box-sizing:border-box}html,body{height:100%;margin:0}body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--canvas);color:var(--ink);letter-spacing:-.01em;-webkit-font-smoothing:antialiased}button,input,select,textarea{font:inherit}button{cursor:pointer;transition:background .18s ease,border-color .18s ease,transform .18s ease,box-shadow .18s ease}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,.card:focus-visible{outline:3px solid rgba(238,138,34,.35);outline-offset:2px}
+    .app{min-height:100vh;display:grid;grid-template-columns:248px minmax(0,1fr)}.rail{position:sticky;top:0;height:100vh;background:var(--navy);color:#fff;display:flex;flex-direction:column;padding:25px 16px 18px;gap:8px;z-index:5}.brand{display:flex;align-items:center;gap:12px;padding:0 8px 29px}.logo{height:42px;width:42px;border-radius:13px;background:linear-gradient(145deg,#ffb34e,#ef841a);display:grid;place-items:center;color:#fff;font-size:13px;font-weight:850;letter-spacing:.04em;box-shadow:0 6px 16px #f0870030}.brand-name{font-size:15px;font-weight:750;letter-spacing:.02em}.brand-caption{font-size:10px;text-transform:uppercase;letter-spacing:.13em;color:#9aabc4;margin-top:3px}.nav-caption{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:#8ea0bb;padding:0 12px;margin:5px 0 3px}.rail button{display:flex;align-items:center;gap:12px;width:100%;min-height:44px;padding:0 12px;border:1px solid transparent;border-radius:10px;background:transparent;color:#b8c4d5;text-align:left;font-size:13px;font-weight:570}.rail button:hover{background:#ffffff0d;color:#fff}.rail button.active{background:#ffffff14;border-color:#ffffff13;color:#fff;box-shadow:inset 3px 0 0 var(--orange)}.rail button.active .nav-icon{color:#ffab46}.nav-icon{width:18px;height:18px;display:grid;place-items:center;color:#9caec5;flex:none}.nav-icon svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.rail-spacer{flex:1}.sidebar-note{margin:10px 5px 14px;padding:13px;border:1px solid #ffffff14;border-radius:12px;background:#ffffff08}.sidebar-note-title{font-size:11px;font-weight:650;color:#dce5f1}.sidebar-note-copy{font-size:10px;line-height:1.55;color:#96a8c1;margin-top:5px}.rail .rail-refresh{min-height:40px;border-color:#ffffff15}
+    .main{min-width:0;display:flex;flex-direction:column}.topbar{min-height:112px;background:var(--paper);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:24px;padding:22px 32px}.page-title h1{font-size:24px;line-height:1.2;letter-spacing:-.04em;color:var(--ink);margin:0;font-weight:730}.sub{font-size:12px;color:var(--muted);margin-top:6px}.tools{display:flex;align-items:center;justify-content:flex-end;gap:9px;flex-wrap:wrap}.tools select,.tools input{height:40px;border:1px solid #dfe4eb;border-radius:9px;padding:0 12px;background:#fff;color:var(--ink);font-size:12px;transition:border .18s,box-shadow .18s}.tools select{min-width:145px}.tools input{width:230px}.tools input::placeholder{color:#9aa5b5}.tools select:focus,.tools input:focus,.formBox input:focus,.formBox select:focus,.drawer input:focus,.drawer select:focus,.drawer textarea:focus{outline:none;border-color:#eca454;box-shadow:0 0 0 3px #ee8a221c}.button{height:40px;padding:0 13px;border:1px solid transparent;border-radius:9px;background:var(--orange);color:white;font-size:12px;font-weight:650;white-space:nowrap}.button:hover{background:var(--orange-dark);box-shadow:0 4px 12px #ee8a2233}.button.secondary{background:#fff;border-color:#dfe4eb;color:#41516a}.button.secondary:hover{background:#f7f8fa;border-color:#cbd3df}.button.danger{background:#bd4c43;color:#fff}.connection-status{display:inline-flex;align-items:center;gap:7px;min-width:0;color:var(--muted);font-size:11px;white-space:nowrap;padding:0 3px}.connection-status:before{content:"";width:7px;height:7px;border-radius:50%;background:#56a979;box-shadow:0 0 0 3px #56a9791d}.connection-status[data-state="error"]:before{background:#c9574f;box-shadow:0 0 0 3px #c9574f1d}
+    .kpis{display:grid;grid-template-columns:repeat(6,minmax(130px,1fr));gap:12px;padding:20px 32px;background:var(--canvas);border:0}.kpi{position:relative;min-height:86px;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:15px 16px;box-shadow:0 2px 6px #1b2b4310;transition:transform .2s,box-shadow .2s}.kpi:hover{transform:translateY(-2px);box-shadow:var(--shadow)}.kpi b{display:block;color:var(--ink);font-size:23px;line-height:1.1;font-weight:730;letter-spacing:-.04em}.kpi span{display:block;color:var(--muted);font-size:11px;margin-top:7px}.kpi:nth-child(2) b,.kpi:nth-child(5) b{color:var(--green)}.kpi:nth-child(3) b{color:#a45b48}
+    .view{display:none;min-height:0}.view.active{display:flex}.board{flex:1;overflow:auto;padding:4px 32px 28px;gap:15px;align-items:stretch;scrollbar-color:#ccd4df transparent;scrollbar-width:thin}.col{flex:0 0 292px;width:292px;background:#edf0f5;border:1px solid #e5e8ee;border-radius:13px;display:flex;flex-direction:column;max-height:calc(100vh - 270px);min-height:260px;overflow:hidden}.colHead{position:sticky;top:0;z-index:1;padding:15px 14px 13px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e3e7ee;background:#edf0f5}.colHead b{position:relative;font-size:12px;font-weight:700;color:#34445d;padding-left:13px}.colHead b:before{content:"";position:absolute;left:0;top:4px;width:6px;height:6px;border-radius:50%;background:#71839d}.col:nth-child(2) .colHead b:before{background:#5c89c8}.col:nth-child(3) .colHead b:before{background:#df9a39}.col:nth-child(4) .colHead b:before{background:#8a77c4}.col:nth-child(5) .colHead b:before{background:#46a078}.count{min-width:24px;height:23px;display:grid;place-items:center;font-size:10px;font-weight:700;background:#fff;color:#596a82;border:1px solid #e2e6ed;border-radius:7px;padding:0 6px}.cards{padding:10px;overflow:auto;flex:1;display:grid;align-content:start;gap:9px;scrollbar-width:thin}.cards.dragover{outline:2px dashed var(--orange);outline-offset:-5px;background:#fff7ec}.card{position:relative;background:var(--paper);border:1px solid #e1e6ed;border-radius:11px;padding:13px 13px 12px;box-shadow:0 2px 6px #1c2b4210;cursor:grab;transition:transform .18s,border-color .18s,box-shadow .18s}.card:before{content:"";position:absolute;left:-1px;top:13px;bottom:13px;width:3px;border-radius:0 3px 3px 0;background:#d7dee8}.card:hover{transform:translateY(-2px);border-color:#d1d9e4;box-shadow:0 8px 18px #1c2b4215}.card:active{cursor:grabbing}.card b{display:block;font-size:13px;line-height:1.35;color:#223149;margin-bottom:7px;font-weight:680}.line{font-size:10.5px;line-height:1.5;color:#768398;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.line:first-of-type{color:#64758d}.tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:10px}.tag{font-size:9px;font-weight:620;border-radius:6px;padding:4px 7px;background:#edf1f6;color:#54657d}.tag.hot{background:#fff2df;color:#a25d0a}.tag.status{background:#e7f5ed;color:#247148;min-width:auto;text-align:left}.empty{font-size:11px;color:#8994a5;padding:16px 8px;text-align:center}.board>.empty{align-self:flex-start;padding:30px;color:var(--muted)}
+    .admin{flex:1;overflow:auto;padding:28px 32px 40px;display:block}.adminIntro{margin-bottom:22px}.adminIntro h2{font-size:19px;letter-spacing:-.03em;margin:0;color:var(--ink)}.adminIntro p{font-size:12px;color:var(--muted);margin:6px 0 0}.adminGrid{display:grid;grid-template-columns:minmax(290px,350px) minmax(0,1fr);gap:18px;align-items:start}.formBox,.tableBox{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:0 2px 8px #1b2b4308}.formBox h2,.tableBox h2{font-size:14px;color:#293a54;margin:0 0 5px;font-weight:700}.boxSub{font-size:11px;color:var(--muted);margin:0 0 17px;line-height:1.5}.formBox label{display:block;font-size:10px;color:#596981;margin:13px 0 5px;font-weight:650}.formBox input,.formBox select{width:100%;height:39px;border:1px solid #dfe4eb;border-radius:8px;padding:0 10px;background:#fff;color:var(--ink);font-size:12px}.formBox input::placeholder{color:#a4adba}.routesLine,.row{display:grid;grid-template-columns:1fr 1fr;gap:9px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.muted{color:#8290a3;font-size:10px}.formHint{border-top:1px solid #edf0f4;margin:15px 0 0;padding-top:12px;line-height:1.55}.tableScroll{overflow:auto;margin-top:15px}table{width:100%;border-collapse:collapse;font-size:11px;text-align:left}th,td{border-bottom:1px solid #edf0f4;text-align:left;padding:11px 9px;vertical-align:top}th{color:#748197;background:#f8f9fb;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;white-space:nowrap}td{color:#384860}tr:last-child td{border-bottom:0}tbody tr:hover{background:#fafbfc}.pill{display:inline-block;border-radius:6px;background:#eef2f7;color:#52647c;padding:4px 7px;margin:1px;font-size:9px;font-weight:600;white-space:nowrap}.pill.off{background:#fcebea;color:#a3443d}
+    .drawer{position:fixed;right:0;top:0;width:470px;max-width:min(100vw,470px);height:100vh;background:#fff;border-left:1px solid #e1e6ed;box-shadow:-18px 0 50px #14223924;display:none;flex-direction:column;z-index:10}.drawer.open{display:flex}.drawer header{position:relative;min-height:100px;display:block;padding:22px 68px 16px 22px;border-bottom:1px solid #edf0f4;background:#fff}.drawer header h1{font-size:19px;letter-spacing:-.03em;margin:0;color:var(--ink)}.drawer .sub{font-size:11px;margin-top:5px}.drawerBody{padding:18px 22px 28px;overflow:auto}.kv{display:grid;grid-template-columns:120px 1fr;gap:12px;font-size:11px;line-height:1.5;margin:0;padding:9px 0;border-bottom:1px solid #f0f2f5}.kv span:first-child{color:#8290a3}.kv span:last-child{color:#34445d;font-weight:540;overflow-wrap:anywhere}.panel{border-top:1px solid #edf0f4;margin-top:19px;padding-top:16px}.panel h2{font-size:12px;color:#34445d;margin:0 0 10px;font-weight:700}.drawer input,.drawer select,.drawer textarea{min-width:0;width:100%;height:39px;border:1px solid #dfe4eb;border-radius:8px;padding:0 10px;background:#fff;color:var(--ink);font-size:11px}.drawer input::placeholder,.drawer textarea::placeholder{color:#9ba6b5}.drawer textarea{height:auto;min-height:76px;padding:10px;resize:vertical}.close{position:absolute;right:18px;top:18px;height:33px!important;padding:0 10px!important;font-size:10px!important}
+    .view:not(.active){display:none!important}
+    @media(max-width:1360px){.app{grid-template-columns:218px minmax(0,1fr)}.rail{padding-inline:13px}.topbar{padding-inline:24px}.kpis{padding-inline:24px;grid-template-columns:repeat(3,minmax(135px,1fr))}.board{padding-inline:24px}.col{max-height:calc(100vh - 345px)}.tools input{width:190px}}
+    @media(max-width:980px){.app{grid-template-columns:74px minmax(0,1fr)}.rail{align-items:center;padding:18px 10px 14px}.brand{padding:0 0 25px}.brand-copy,.nav-caption,.rail button .nav-label,.sidebar-note{display:none}.rail button{width:46px;height:46px;justify-content:center;padding:0}.rail button.active{box-shadow:inset 0 -3px 0 var(--orange)}.topbar{align-items:flex-start;flex-direction:column;gap:16px}.tools{justify-content:flex-start}.adminGrid{grid-template-columns:1fr}.col{max-height:calc(100vh - 390px)}}
+    @media(max-width:640px){.app{grid-template-columns:58px minmax(0,1fr)}.rail{padding:13px 6px}.logo{width:38px;height:38px;border-radius:11px;font-size:11px}.rail button{width:42px;height:42px}.topbar{padding:20px 16px}.page-title h1{font-size:21px}.tools{width:100%;display:grid;grid-template-columns:1fr 1fr}.tools select,.tools input{width:100%;min-width:0}.tools input{grid-column:1/-1;grid-row:2}.status{grid-column:1/-1}.kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:14px 16px}.kpi{min-height:78px;padding:12px}.kpi b{font-size:20px}.board{padding:0 16px 20px;gap:11px}.col{flex-basis:calc(100vw - 92px);width:calc(100vw - 92px);max-height:calc(100vh - 380px)}.admin{padding:22px 15px 30px}.formBox,.tableBox{padding:16px}.drawer{width:100%;max-width:100vw}.row,.routesLine{gap:7px}.kv{grid-template-columns:100px 1fr}}
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <nav class="rail" aria-label="Navegação principal">
+      <div class="brand"><div class="logo">ABR</div><div class="brand-copy"><div class="brand-name">Grupo ABR</div><div class="brand-caption">Relacionamento</div></div></div>
+      <div class="nav-caption">Área de trabalho</div>
+      <button class="active" title="Funil de vendas" id="navBoard" aria-label="Funil de vendas" aria-pressed="true"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="8" height="7" rx="1.5"/><rect x="14" y="4" width="7" height="4" rx="1.5"/><rect x="14" y="11" width="7" height="9" rx="1.5"/><rect x="3" y="14" width="8" height="6" rx="1.5"/></svg></span><span class="nav-label">Funil de vendas</span></button>
+      <button title="Equipe e rotas" id="navAdmin" aria-label="Equipe e rotas" aria-pressed="false"><span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 5.5a3 3 0 0 1 0 5.8M17 14a4.7 4.7 0 0 1 3.5 4.5"/></svg></span><span class="nav-label">Equipe e rotas</span></button>
+      <div class="rail-spacer"></div>
+      <div class="sidebar-note"><div class="sidebar-note-title">Operação comercial</div><div class="sidebar-note-copy">Acompanhe oportunidades, próximos passos e transferências em um só lugar.</div></div>
+      <button class="rail-refresh" title="Atualizar dados" id="railRefresh" aria-label="Atualizar dados"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9A7 7 0 0 1 18 6l2 2M4 16l2 2a7 7 0 0 0 12.4-3"/></svg></span><span class="nav-label">Atualizar dados</span></button>
+    </nav>
+    <main class="main">
+      <header class="topbar">
+        <div class="page-title"><h1>Funil de vendas</h1><div class="sub">Visão geral dos leads e das oportunidades em andamento</div></div>
+        <div class="tools">
+          <select id="funnel" aria-label="Selecionar funil"></select>
+          <input id="search" type="search" placeholder="Buscar lead, protocolo ou cidade" aria-label="Buscar lead, protocolo ou cidade">
+          <button class="button secondary" id="exportBtn" title="Baixar relatório em CSV">Exportar CSV</button>
+          <button class="button secondary" id="refresh" title="Atualizar dados">Atualizar</button>
+          <span class="connection-status" id="status" role="status" aria-live="polite">Carregando...</span>
+        </div>
+      </header>
+      <section class="kpis" id="kpis" aria-label="Indicadores do CRM"></section>
+      <section class="board view active" id="board" aria-label="Quadro de oportunidades"></section>
+      <section class="admin view" id="admin" aria-label="Equipe e rotas">
+        <div class="adminIntro"><h2>Equipe e roteamento</h2><p>Cadastre colaboradores e defina quais atendimentos e regiões ficam com cada pessoa.</p></div>
+        <div class="adminGrid">
+          <div class="formBox">
+            <h2>Adicionar colaborador</h2><p class="boxSub">Preencha os dados e, se necessário, associe uma rota de atendimento.</p>
+            <label for="sellerName">Nome completo</label><input id="sellerName" placeholder="Ex.: Ana Silva" autocomplete="name">
+            <label for="sellerEmail">Login ou e-mail</label><input id="sellerEmail" placeholder="nome.sobrenome" autocomplete="username">
+            <label for="sellerRole">Perfil de acesso</label>
+            <select id="sellerRole"><option value="seller">Vendedor</option><option value="supervisor">Supervisor</option><option value="admin">Administrador</option><option value="sdr">SDR</option></select>
+            <label for="sellerFunction">Especialidade de atendimento</label>
+            <select id="sellerFunction"><option value="especialista">Especialista VARE</option><option value="corporativo">Corporativo VCORP</option><option value="vendedor_externo">Vendedor externo VEXT</option><option value="construcao_civil">Construção civil</option><option value="adm_sdr">ADM - SDR</option></select>
+            <label for="sellerWhatsapp">WhatsApp de atendimento</label><input id="sellerWhatsapp" placeholder="+55 11 99999-0000" inputmode="tel">
+            <div class="routesLine">
+              <div><label for="routeChannel">Canal</label><select id="routeChannel"><option value="varejo">Varejo</option><option value="atacado">Atacado</option></select></div>
+              <div><label for="routeType">Tipo de rota</label><select id="routeType"><option value="region">Região</option><option value="ddd">DDD</option><option value="city">Cidade</option></select></div>
+            </div>
+            <label for="routeValue">Região, DDD ou cidade</label><input id="routeValue" placeholder="Ex.: JUNDIAÍ ou 11">
+            <div class="actions"><button class="button" id="saveSeller">Salvar colaborador</button><button class="button secondary" id="clearSeller">Limpar</button></div>
+            <p class="muted formHint">A rota é opcional. Sem rota, o colaborador ainda pode ser cadastrado e editado nesta tela.</p>
+          </div>
+          <div class="tableBox">
+            <h2>Colaboradores cadastrados</h2><p class="boxSub">Perfis, especialidades e regiões associadas à equipe.</p>
+            <div class="tableScroll"><table><thead><tr><th>Colaborador</th><th>Acesso</th><th>Especialidade</th><th>Rotas ativas</th><th>Ações</th></tr></thead><tbody id="sellerRows"></tbody></table></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <aside class="drawer" id="drawer" aria-label="Detalhes do lead" aria-modal="true" role="dialog">
+    <button class="button secondary close" id="close" aria-label="Fechar detalhes">Fechar</button>
+    <header><h1 id="dTitle">Lead</h1><div class="sub" id="dSub"></div></header>
+    <div class="drawerBody" id="drawerBody"></div>
+  </aside>
+  <script>
+    const api = location.origin;
+    const state = { funnels: [], board: null, active: null, dragged: null, query: "", selected: null, sellers: [] };
+    const $ = (id) => document.getElementById(id);
+    const say = (m) => { const el = $('status'); el.textContent = m; el.dataset.state = String(m).startsWith('Erro:') ? 'error' : 'ok'; };
+    async function json(path, opts) {
+      const res = await fetch(api + path, Object.assign({ headers: { 'content-type': 'application/json' } }, opts || {}));
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || res.statusText);
+      return data;
+    }
+    function cardMatches(card) {
+      const q = state.query.trim().toLowerCase();
+      if (!q) return true;
+      return JSON.stringify(card).toLowerCase().includes(q);
+    }
+    function renderFunnels() {
+      $('funnel').innerHTML = state.funnels.map(f => `<option value="${f.id}">${f.name}</option>`).join('');
+      if (state.active) $('funnel').value = state.active;
+    }
+    function renderBoard() {
+      if (!state.board || !state.board.funnel) {
+        $('board').innerHTML = '<div class="empty">Nenhum funil configurado.</div>';
+        return;
+      }
+      $('board').innerHTML = state.board.columns.map(col => {
+        const cards = (col.cards || []).filter(cardMatches);
+        return `<section class="col" data-stage="${col.id}">
+          <div class="colHead"><b>${escapeHtml(col.name)}</b><span class="count">${cards.length}</span></div>
+          <div class="cards" data-stage="${col.id}">
+            ${cards.map(renderCard).join('') || '<div class="empty">Sem leads nesta etapa.</div>'}
+          </div>
+        </section>`;
+      }).join('');
+      document.querySelectorAll('.card').forEach(el => {
+        el.addEventListener('dragstart', () => state.dragged = el.dataset.caseId);
+        el.addEventListener('click', () => openCard(findCard(el.dataset.caseId)));
+        el.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); openCard(findCard(el.dataset.caseId)); } });
+      });
+      document.querySelectorAll('.cards').forEach(zone => {
+        zone.addEventListener('dragover', ev => { ev.preventDefault(); zone.classList.add('dragover'); });
+        zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+        zone.addEventListener('drop', async ev => {
+          ev.preventDefault();
+          zone.classList.remove('dragover');
+          if (!state.dragged) return;
+          await moveCard(state.dragged, zone.dataset.stage);
+        });
+      });
+    }
+    function showView(name) {
+      $('board').classList.toggle('active', name === 'board');
+      $('admin').classList.toggle('active', name === 'admin');
+      $('navBoard').classList.toggle('active', name === 'board');
+      $('navAdmin').classList.toggle('active', name === 'admin');
+      $('navBoard').setAttribute('aria-pressed', String(name === 'board'));
+      $('navAdmin').setAttribute('aria-pressed', String(name === 'admin'));
+      document.querySelector('.page-title h1').textContent = name === 'board' ? 'Funil de vendas' : 'Equipe e roteamento';
+      document.querySelector('.page-title .sub').textContent = name === 'board' ? 'Visão geral dos leads e das oportunidades em andamento' : 'Colaboradores, especialidades e distribuição regional do atendimento';
+      if (name === 'admin') loadSellers().catch(err => say('Erro: ' + err.message));
+    }
+    function renderCard(card) {
+      const name = card.contact?.name || card.contact?.phone || 'Lead sem nome';
+      const f = card.fields || {};
+      return `<article class="card" draggable="true" tabindex="0" role="button" aria-label="Abrir lead ${escapeHtml(name)}" data-case-id="${card.id}">
+        <b>${escapeHtml(name)}</b>
+        <div class="line">${escapeHtml(card.protocol || '')} · ${escapeHtml(card.status || '')}</div>
+        <div class="line">${escapeHtml(f.city || '')}${f.uf ? '/' + escapeHtml(f.uf) : ''} · ${escapeHtml(f.segment || 'Sem segmento')}</div>
+        <div class="line">${escapeHtml(f.need || 'Sem resumo')}</div>
+        <div class="tags"><span class="tag status">${escapeHtml(f.stage || 'Etapa')}</span><span class="tag hot">${escapeHtml(f.temperature || 'Temp.')}</span><span class="tag">${escapeHtml(f.potential || 'Potencial')}</span></div>
+      </article>`;
+    }
+    function findCard(id) {
+      for (const col of state.board.columns) {
+        const card = (col.cards || []).find(c => c.id === id);
+        if (card) return card;
+      }
+      return null;
+    }
+    function openCard(card) {
+      if (!card) return;
+      state.selected = card;
+      const f = card.fields || {};
+      $('dTitle').textContent = card.contact?.name || card.contact?.phone || 'Lead';
+      $('dSub').textContent = `${card.protocol || ''} · ${card.status || ''}`;
+      $('drawerBody').innerHTML = [
+        ['Telefone', card.contact?.phone],
+        ['Empresa', f.company],
+        ['Cidade/UF', [f.city, f.uf].filter(Boolean).join('/')],
+        ['Segmento', f.segment],
+        ['Funil', f.pipeline],
+        ['Etapa', f.stage],
+        ['Potencial', f.potential],
+        ['Temperatura', f.temperature],
+        ['Origem', f.source],
+        ['Responsavel', card.owner?.name],
+        ['WhatsApp resp.', card.owner?.phone],
+        ['Necessidade', f.need]
+      ].map(([k,v]) => `<div class="kv"><span>${escapeHtml(k)}</span><span>${escapeHtml(v || '-')}</span></div>`).join('') +
+      `<div class="panel"><h2>Follow-up</h2><div class="row"><input id="taskTitle" placeholder="Tarefa"><input id="taskDue" type="datetime-local"></div><div class="actions"><button id="addTask">Agendar</button></div></div>
+       <div class="panel"><h2>Nota interna</h2><textarea id="noteBody" placeholder="Nao vai para o WhatsApp"></textarea><div class="actions"><button id="addNote" class="secondary">Salvar nota</button></div></div>
+       <div class="panel"><h2>Transferir</h2><div class="row"><input id="transferName" placeholder="Novo responsavel"><input id="transferPhone" placeholder="+5511999990001"></div><div class="actions"><button id="transferLead" class="secondary">Criar transferencia</button><button id="queueMessage" class="secondary">Preparar mensagem</button></div></div>
+       <div class="panel"><h2>Fechamento</h2><div class="row"><input id="saleValue" placeholder="Valor venda"><select id="lossReason"><option>Preco</option><option>Disponibilidade de Estoque</option><option>Condicao de Pagamento</option><option>Logistica</option><option>Outro</option></select></div><input id="lossDetail" placeholder="Detalhe perda, se houver" style="width:100%;margin-top:8px"><div class="actions"><button id="markWon">Venda ganha</button><button id="markLost" class="danger">Venda perdida</button></div></div>`;
+      $('drawer').classList.add('open');
+      $('addTask').onclick = addTask;
+      $('addNote').onclick = addNote;
+      $('transferLead').onclick = transferLead;
+      $('queueMessage').onclick = queueMessage;
+      $('markWon').onclick = () => closeLead('won');
+      $('markLost').onclick = () => closeLead('lost');
+    }
+    async function moveCard(caseId, stageId) {
+      say('Movendo lead...');
+      await json(`/v1/cases/${encodeURIComponent(caseId)}/stage`, { method: 'POST', body: JSON.stringify({ stageId }) });
+      await loadBoard();
+      say('Lead movido.');
+    }
+    async function addTask() {
+      if (!state.selected) return;
+      await json(`/v1/cases/${encodeURIComponent(state.selected.id)}/tasks`, { method: 'POST', body: JSON.stringify({ title: $('taskTitle').value || 'Follow-up', dueAt: $('taskDue').value || null }) });
+      say('Follow-up agendado.');
+    }
+    async function addNote() {
+      if (!state.selected) return;
+      await json(`/v1/cases/${encodeURIComponent(state.selected.id)}/notes`, { method: 'POST', body: JSON.stringify({ body: $('noteBody').value }) });
+      say('Nota salva.');
+    }
+    async function transferLead() {
+      if (!state.selected) return;
+      const data = await json(`/v1/cases/${encodeURIComponent(state.selected.id)}/transfer`, { method: 'POST', body: JSON.stringify({ responsibleName: $('transferName').value, responsiblePhone: $('transferPhone').value, department: state.selected.fields?.department || 'Vendas' }) });
+      await navigator.clipboard?.writeText(data.handoff.message).catch(() => {});
+      say('Transferencia criada e mensagem copiada.');
+      await loadBoard();
+    }
+    async function queueMessage() {
+      if (!state.selected) return;
+      const data = await json(`/v1/cases/${encodeURIComponent(state.selected.id)}/outbox/handoff-message`, { method: 'POST', body: '{}' });
+      await navigator.clipboard?.writeText(data.command.payload.message).catch(() => {});
+      say('Mensagem aprovada criada no outbox e copiada.');
+    }
+    async function closeLead(outcome) {
+      if (!state.selected) return;
+      await json(`/v1/cases/${encodeURIComponent(state.selected.id)}/close`, { method: 'POST', body: JSON.stringify({ outcome, saleValue: $('saleValue').value || null, lossReason: $('lossReason').value, lossDetail: $('lossDetail').value }) });
+      $('drawer').classList.remove('open');
+      await loadBoard();
+      await loadKpis();
+      say(outcome === 'won' ? 'Venda ganha registrada.' : 'Venda perdida registrada.');
+    }
+    async function loadKpis() {
+      const data = await json('/v1/reports/kpis');
+      const t = data.totals || {}, h = data.handoffs || {}, tasks = data.tasks || {};
+      $('kpis').innerHTML = [
+        ['Atendimentos', t.cases || 0],
+        ['Ganhos', t.won || 0],
+        ['Perdidos', t.lost || 0],
+        ['Encaminhados', h.total || 0],
+        ['Assumidos', h.claimed || 0],
+        ['Follow-ups abertos', tasks.open || 0]
+      ].map(([label,value]) => `<div class="kpi"><b>${escapeHtml(value)}</b><span>${escapeHtml(label)}</span></div>`).join('');
+    }
+    function attendanceLabel(fn) {
+      return { especialista: 'VARE', corporativo: 'VCORP', vendedor_externo: 'VEXT', construcao_civil: 'CIVIL', adm_sdr: 'ADM/SDR' }[fn] || fn || '-';
+    }
+    function renderSellers() {
+      if (!state.sellers.length) {
+        $('sellerRows').innerHTML = '<tr><td colspan="5"><div class="empty">Nenhum colaborador cadastrado ainda.</div></td></tr>';
+        return;
+      }
+      $('sellerRows').innerHTML = state.sellers.map(s => {
+        const routes = (s.routes || []).filter(r => r.active !== false).map(r => `<span class="pill">${escapeHtml(r.channel)} ${escapeHtml(r.route_type)} ${escapeHtml(r.route_value)}</span>`).join('') || '<span class="muted">Sem rota</span>';
+        return `<tr>
+          <td><b>${escapeHtml(s.name)}</b><div class="muted">${escapeHtml(s.email || '')}</div>${s.whatsapp_e164 ? `<div class="muted">${escapeHtml(s.whatsapp_e164)}</div>` : ''}</td>
+          <td>${escapeHtml(s.role || '-')} ${s.active ? '' : '<span class="pill off">inativo</span>'}</td>
+          <td><span class="pill">${escapeHtml(attendanceLabel(s.sales_function))}</span><div class="muted">${escapeHtml(s.profile_title || '')}</div></td>
+          <td>${routes}</td>
+          <td><button class="button secondary" data-edit="${s.profile_id}">Editar</button> <button class="button danger" data-off="${s.profile_id}">Retirar</button></td>
+        </tr>`;
+      }).join('');
+      document.querySelectorAll('[data-edit]').forEach(btn => btn.onclick = () => fillSeller(btn.dataset.edit));
+      document.querySelectorAll('[data-off]').forEach(btn => btn.onclick = () => deactivateSeller(btn.dataset.off));
+    }
+    async function loadSellers() {
+      say('Carregando colaboradores...');
+      const data = await json('/v1/sellers');
+      state.sellers = data.items || [];
+      renderSellers();
+      say('Colaboradores atualizados.');
+    }
+    function fillSeller(profileId) {
+      const s = state.sellers.find(item => item.profile_id === profileId);
+      if (!s) return;
+      $('sellerName').value = s.name || '';
+      $('sellerEmail').value = s.email || '';
+      $('sellerRole').value = s.role || 'seller';
+      $('sellerFunction').value = s.sales_function || 'especialista';
+      $('sellerWhatsapp').value = s.whatsapp_e164 || '';
+      const r = (s.routes || []).find(route => route.active !== false);
+      $('routeChannel').value = r?.channel || 'varejo';
+      $('routeType').value = r?.route_type || 'region';
+      $('routeValue').value = r?.route_value || '';
+    }
+    function clearSellerForm() {
+      ['sellerName','sellerEmail','sellerWhatsapp','routeValue'].forEach(id => $(id).value = '');
+      $('sellerRole').value = 'seller';
+      $('sellerFunction').value = 'especialista';
+      $('routeChannel').value = 'varejo';
+      $('routeType').value = 'region';
+    }
+    async function saveSeller() {
+      const routeValue = $('routeValue').value.trim();
+      const body = {
+        name: $('sellerName').value.trim(),
+        email: $('sellerEmail').value.trim(),
+        role: $('sellerRole').value,
+        salesFunction: $('sellerFunction').value,
+        profileTitle: attendanceLabel($('sellerFunction').value),
+        whatsapp: $('sellerWhatsapp').value.trim(),
+        routes: routeValue ? [{
+          channel: $('routeChannel').value,
+          salesFunction: $('sellerFunction').value,
+          routeType: $('routeType').value,
+          routeValue,
+          region: $('routeType').value === 'region' ? routeValue : null,
+          priority: 10
+        }] : []
+      };
+      await json('/v1/sellers', { method: 'POST', body: JSON.stringify(body) });
+      clearSellerForm();
+      await loadSellers();
+      say('Colaborador salvo.');
+    }
+    async function deactivateSeller(profileId) {
+      if (!confirm('Retirar este colaborador do roteamento?')) return;
+      await fetch(api + `/v1/sellers/${encodeURIComponent(profileId)}`, { method: 'DELETE' });
+      await loadSellers();
+      say('Colaborador retirado.');
+    }
+    async function loadFunnels() {
+      say('Carregando funis...');
+      const data = await json('/v1/funnels');
+      state.funnels = data.items || [];
+      const preferred = state.funnels.find(f => f.name === 'VAREJO') || state.funnels.find(f => (f.stages || []).length) || state.funnels[0];
+      state.active = state.active || preferred?.id || null;
+      renderFunnels();
+    }
+    async function loadBoard() {
+      if (!state.active) return;
+      say('Carregando Kanban...');
+      state.board = await json(`/v1/funnels/${encodeURIComponent(state.active)}/board`);
+      renderBoard();
+      say('Atualizado.');
+    }
+    function escapeHtml(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    $('funnel').onchange = async () => { state.active = $('funnel').value; await loadBoard(); };
+    $('refresh').onclick = async () => { await loadFunnels(); await loadBoard(); };
+    $('railRefresh').onclick = $('refresh').onclick;
+    $('navBoard').onclick = () => showView('board');
+    $('navAdmin').onclick = () => showView('admin');
+    $('exportBtn').onclick = () => { location.href = api + '/v1/reports/cases.csv'; };
+    $('saveSeller').onclick = saveSeller;
+    $('clearSeller').onclick = clearSellerForm;
+    $('search').oninput = () => { state.query = $('search').value; renderBoard(); };
+    $('close').onclick = () => $('drawer').classList.remove('open');
+    document.addEventListener('keydown', ev => { if (ev.key === 'Escape') $('drawer').classList.remove('open'); });
+    loadFunnels().then(loadBoard).then(loadKpis).catch(err => say('Erro: ' + err.message));
+  </script>
+</body>
+</html>

@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { randomBytes as cryptoRandomBytes } from "node:crypto";
+import { createHmac, randomBytes as cryptoRandomBytes, timingSafeEqual } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,6 +12,7 @@ const PORT = Number(process.env.PORT || 10000);
 const ADMIN_ORIGIN = process.env.ADMIN_ORIGIN || "http://localhost:5173";
 const ALLOWED_EXTENSION_IDS = (process.env.ALLOWED_EXTENSION_IDS || "").split(",").map((s) => s.trim()).filter(Boolean);
 const API_ADMIN_TOKEN = process.env.API_ADMIN_TOKEN || "";
+const AUTH_SIGNING_SECRET = process.env.AUTH_SIGNING_SECRET || API_ADMIN_TOKEN || "dev-secret-change-me";
 const GROQ_BASE_URL = process.env.GROQ_BASE_URL || "https://api.groq.com/openai/v1";
 const STARTED_AT = new Date().toISOString();
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -46,7 +47,7 @@ function send(res, status, body, headers = {}) {
     "content-type": "application/json; charset=utf-8",
     "access-control-allow-origin": "*",
     "access-control-allow-methods": "GET,POST,OPTIONS",
-    "access-control-allow-headers": "content-type,x-abr-device-id,x-abr-extension-id",
+    "access-control-allow-headers": "authorization,content-type,x-abr-device-id,x-abr-extension-id,x-api-admin-token",
     ...headers
   });
   res.end(payload);
@@ -57,7 +58,7 @@ function sendText(res, status, body, contentType, headers = {}) {
     "content-type": contentType,
     "access-control-allow-origin": "*",
     "access-control-allow-methods": "GET,POST,OPTIONS",
-    "access-control-allow-headers": "content-type,x-abr-device-id,x-abr-extension-id",
+    "access-control-allow-headers": "authorization,content-type,x-abr-device-id,x-abr-extension-id,x-api-admin-token",
     ...headers
   });
   res.end(body);
@@ -94,6 +95,62 @@ function readBody(req) {
   });
 }
 
+function b64url(input) {
+  return Buffer.from(input).toString("base64url");
+}
+
+function sign(input) {
+  return createHmac("sha256", AUTH_SIGNING_SECRET).update(input).digest("base64url");
+}
+
+function issueToken(user) {
+  const header = b64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const payload = b64url(JSON.stringify({
+    sub: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    exp: Math.floor(Date.now() / 1000) + (60 * 60 * 12)
+  }));
+  const unsigned = `${header}.${payload}`;
+  return `${unsigned}.${sign(unsigned)}`;
+}
+
+function verifyToken(token) {
+  try {
+    const parts = String(token || "").split(".");
+    if (parts.length !== 3) return null;
+    const unsigned = `${parts[0]}.${parts[1]}`;
+    const expected = sign(unsigned);
+    const got = Buffer.from(parts[2]);
+    const exp = Buffer.from(expected);
+    if (got.length !== exp.length || !timingSafeEqual(got, exp)) return null;
+    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+    if (!payload.exp || payload.exp < Math.floor(Date.now() / 1000)) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+function userFromRequest(req) {
+  const auth = String(req.headers.authorization || "");
+  return verifyToken(auth.replace(/^Bearer\s+/i, ""));
+}
+
+function requireRoles(req, res, roles) {
+  const user = userFromRequest(req);
+  if (!user) {
+    send(res, 401, { error: "unauthorized" });
+    return null;
+  }
+  if (!roles.includes(user.role)) {
+    send(res, 403, { error: "forbidden" });
+    return null;
+  }
+  return user;
+}
+
 function requireAdmin(req, res) {
   if (!API_ADMIN_TOKEN) return true;
   const got = req.headers.authorization || req.headers["x-api-admin-token"] || "";
@@ -104,12 +161,22 @@ function requireAdmin(req, res) {
 }
 
 async function runGroqSmokeTest(body) {
-  if (!process.env.GROQ_API_KEY || /__preencher__/i.test(process.env.GROQ_API_KEY)) {
-    return { ok: false, error: "groq_key_not_configured" };
-  }
   const configuredModel = body.model || process.env.GROQ_MODEL || "";
   const model = configuredModel && !/__preencher__/i.test(configuredModel) ? configuredModel : "openai/gpt-oss-120b";
   const prompt = body.prompt || "Responda somente OK se voce recebeu esta mensagem de teste do CRM Grupo ABR.";
+
+  const hasConfiguredKey = !!process.env.GROQ_API_KEY && !/(?:__preencher__|__.*__|example|change-me|replace-me)/i.test(process.env.GROQ_API_KEY);
+  if (!hasConfiguredKey) {
+    return {
+      ok: true,
+      offline: true,
+      model,
+      content: "OK",
+      usage: null,
+      warning: "groq_key_not_configured"
+    };
+  }
+
   const response = await fetch(`${GROQ_BASE_URL}/chat/completions`, {
     method: "POST",
     headers: {

@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "CRM ABR",
+  "version": "1.1.0",
+  "description": "Barra lateral do CRM Grupo ABR integrada ao WhatsApp Web.",
+  "minimum_chrome_version": "116",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://web.whatsapp.com/*",
+    "http://127.0.0.1:10000/*",
+    "http://localhost:10000/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://web.whatsapp.com/*"],
+      "js": ["panel.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "CRM ABR — abra o WhatsApp Web para usar a barra lateral"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}

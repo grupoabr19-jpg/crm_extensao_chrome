@@ -237,6 +237,14 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
       const routed = routeLead(body);
       return { destination: routed.user, reason: routed.reason };
     },
+    authenticateUser: async (body) => {
+      const email = String(body.email || body.login || "").trim().toLowerCase();
+      const password = String(body.password || "");
+      if (!email || password !== "ABR@2026") return { error: "invalid_credentials" };
+      const user = db.users.find((item) => String(item.email || "").toLowerCase() === email || `${String(item.login || "").toLowerCase()}@grupoabr.com.br` === email);
+      if (!user) return { error: "invalid_credentials" };
+      return { user };
+    },
     listSellers: async () => ({ items: db.sellers, total: db.sellers.length }),
     createSeller: async (body) => {
       const seller = {
@@ -722,6 +730,21 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
         device: { ...device, local_phone: phone.ok ? phone.e164 : null, mode: body.mode === "destination" ? "destination" : "main" },
         state: { organization: ctx.org, counts }
       };
+    },
+    authenticateUser: async (body) => {
+      const loginOrEmail = String(body.email || body.login || "").trim().toLowerCase();
+      const email = loginOrEmail.includes("@") ? loginOrEmail : `${loginOrEmail}@grupoabr.com.br`;
+      const password = String(body.password || "");
+      const user = await one(`
+        select id, email, display_name as name, role, status
+        from users
+        where lower(email)=lower($1)
+          and status='active'
+          and password_hash = crypt($2, password_hash)
+        limit 1
+      `, [email, password]);
+      if (!user) return { error: "invalid_credentials" };
+      return { user };
     },
     simulateRouting: async (body) => {
       const ctx = await ready();

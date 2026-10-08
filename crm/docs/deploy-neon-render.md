@@ -9,7 +9,8 @@ O CRM web tambem e servido pela API em `/crm`. Esta tela abre fora do WhatsApp e
 - `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `GROQ_API_KEY` e `AUTH_SIGNING_SECRET` devem existir apenas no backend.
 - `API_ADMIN_TOKEN` protege testes administrativos como IA e transferencia de teste. Use o mesmo valor apenas em ambiente seguro para smoke tests.
 - `GROQ_MODEL` define o modelo usado no teste da IA. Se ficar vazio ou com placeholder, a API usa `openai/gpt-oss-120b`. `GROQ_BASE_URL` pode ficar em `https://api.groq.com/openai/v1`.
-- `ABR_TEST_CUSTOMER_PHONE`, `ABR_TEST_DESTINATION_PHONE` e `ABR_TEST_DESTINATION_NAME` alimentam o smoke test de transferencia sem depender de clientes reais.
+- `POST /v1/ai/test` funciona localmente mesmo sem `GROQ_API_KEY`: quando a chave nao existe ou e placeholder, a API devolve um stub seguro `OK` para manter o smoke test e a validação inicial funcionando sem dependência externa.
+- `ABR_TEST_CUSTOMER_PHONE`,  `ABR_TEST_DESTINATION_PHONE` e `ABR_TEST_DESTINATION_NAME` alimentam o smoke test de transferencia sem depender de clientes reais.
 - Nunca coloque valores reais em `.env.example`, no build da extensao ou em logs.
 - Se algum segredo real foi commitado ou compartilhado, rotacione-o no Neon/Groq antes de usar o ambiente.
 
@@ -30,7 +31,7 @@ Repository: https://github.com/grupoabr19-jpg/crm_extensao_chrome.git
 Name: abr-crm-api
 Runtime: Node
 Branch: master
-Root Directory: abr-crm
+Root Directory: crm
 Build Command: npm ci
 Start Command: npm start
 Instance Type: Free
@@ -90,7 +91,7 @@ Antes de producao, ajuste:
 Comando local da API:
 
 ```bash
-cd abr-crm
+cd crm
 npm install
 npm run db:migrate
 npm run api:dev
@@ -99,14 +100,14 @@ npm run api:dev
 Smoke test local ou Render:
 
 ```bash
-cd abr-crm
+cd crm
 ABR_API_BASE_URL=https://SEU-SERVICO.onrender.com npm run smoke:test
 ```
 
 No Windows PowerShell:
 
 ```powershell
-cd abr-crm
+cd crm
 $env:ABR_API_BASE_URL = "https://SEU-SERVICO.onrender.com"
 npm run smoke:test
 ```
