@@ -4,7 +4,7 @@
   if (document.getElementById('abr-crm-host')) return;
 
   var STORE_KEY = 'abrCrmMvpConfig';
-  var DEFAULT_API = 'http://127.0.0.1:10000';
+  var DEFAULT_API = 'https://abr-crm-api.onrender.com';
   var mem = {};
   var store = (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) ? chrome.storage.local : null;
 
@@ -145,7 +145,13 @@
   });
 
   load(function (cfg) {
-    $('api').value = cfg.api || DEFAULT_API;
+    var configuredApi = cfg.api || '';
+    if (configuredApi === 'http://127.0.0.1:10000' || configuredApi === 'http://localhost:10000') {
+      configuredApi = DEFAULT_API;
+      cfg.api = DEFAULT_API;
+      save(cfg);
+    }
+    $('api').value = configuredApi || DEFAULT_API;
     $('mode').value = cfg.mode || 'main';
     $('localPhone').value = cfg.localPhone || '';
     $('device').value = cfg.deviceId || '';

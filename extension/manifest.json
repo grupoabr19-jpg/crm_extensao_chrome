@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
   "name": "CRM ABR",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Barra lateral do CRM Grupo ABR integrada ao WhatsApp Web.",
   "minimum_chrome_version": "116",
   "permissions": ["storage"],
   "host_permissions": [
     "https://web.whatsapp.com/*",
+    "https://abr-crm-api.onrender.com/*",
     "http://127.0.0.1:10000/*",
     "http://localhost:10000/*"
   ],
