@@ -13,7 +13,7 @@
     .kpis{display:grid;grid-template-columns:repeat(6,minmax(130px,1fr));gap:12px;padding:20px 32px;background:var(--canvas);border:0}.kpi{position:relative;min-height:86px;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:15px 16px;box-shadow:0 2px 6px #1b2b4310;transition:transform .2s,box-shadow .2s}.kpi:hover{transform:translateY(-2px);box-shadow:var(--shadow)}.kpi b{display:block;color:var(--ink);font-size:23px;line-height:1.1;font-weight:730;letter-spacing:-.04em}.kpi span{display:block;color:var(--muted);font-size:11px;margin-top:7px}.kpi:nth-child(2) b,.kpi:nth-child(5) b{color:var(--green)}.kpi:nth-child(3) b{color:#a45b48}
     .view{display:none;min-height:0}.view.active{display:flex}.board{flex:1;overflow:auto;padding:4px 32px 28px;gap:15px;align-items:stretch;scrollbar-color:#ccd4df transparent;scrollbar-width:thin}.col{flex:0 0 292px;width:292px;background:#edf0f5;border:1px solid #e5e8ee;border-radius:13px;display:flex;flex-direction:column;max-height:calc(100vh - 270px);min-height:260px;overflow:hidden}.colHead{position:sticky;top:0;z-index:1;padding:15px 14px 13px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e3e7ee;background:#edf0f5}.colHead b{position:relative;font-size:12px;font-weight:700;color:#34445d;padding-left:13px}.colHead b:before{content:"";position:absolute;left:0;top:4px;width:6px;height:6px;border-radius:50%;background:#71839d}.col:nth-child(2) .colHead b:before{background:#5c89c8}.col:nth-child(3) .colHead b:before{background:#df9a39}.col:nth-child(4) .colHead b:before{background:#8a77c4}.col:nth-child(5) .colHead b:before{background:#46a078}.count{min-width:24px;height:23px;display:grid;place-items:center;font-size:10px;font-weight:700;background:#fff;color:#596a82;border:1px solid #e2e6ed;border-radius:7px;padding:0 6px}.cards{padding:10px;overflow:auto;flex:1;display:grid;align-content:start;gap:9px;scrollbar-width:thin}.cards.dragover{outline:2px dashed var(--orange);outline-offset:-5px;background:#fff7ec}.card{position:relative;background:var(--paper);border:1px solid #e1e6ed;border-radius:11px;padding:13px 13px 12px;box-shadow:0 2px 6px #1c2b4210;cursor:grab;transition:transform .18s,border-color .18s,box-shadow .18s}.card:before{content:"";position:absolute;left:-1px;top:13px;bottom:13px;width:3px;border-radius:0 3px 3px 0;background:#d7dee8}.card:hover{transform:translateY(-2px);border-color:#d1d9e4;box-shadow:0 8px 18px #1c2b4215}.card:active{cursor:grabbing}.card b{display:block;font-size:13px;line-height:1.35;color:#223149;margin-bottom:7px;font-weight:680}.line{font-size:10.5px;line-height:1.5;color:#768398;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.line:first-of-type{color:#64758d}.tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:10px}.tag{font-size:9px;font-weight:620;border-radius:6px;padding:4px 7px;background:#edf1f6;color:#54657d}.tag.hot{background:#fff2df;color:#a25d0a}.tag.status{background:#e7f5ed;color:#247148;min-width:auto;text-align:left}.empty{font-size:11px;color:#8994a5;padding:16px 8px;text-align:center}.board>.empty{align-self:flex-start;padding:30px;color:var(--muted)}
     .admin{flex:1;overflow:auto;padding:28px 32px 40px;display:block}.adminIntro{margin-bottom:22px}.adminIntro h2{font-size:19px;letter-spacing:-.03em;margin:0;color:var(--ink)}.adminIntro p{font-size:12px;color:var(--muted);margin:6px 0 0}.adminGrid{display:grid;grid-template-columns:minmax(290px,350px) minmax(0,1fr);gap:18px;align-items:start}.formBox,.tableBox{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:0 2px 8px #1b2b4308}.formBox h2,.tableBox h2{font-size:14px;color:#293a54;margin:0 0 5px;font-weight:700}.boxSub{font-size:11px;color:var(--muted);margin:0 0 17px;line-height:1.5}.formBox label{display:block;font-size:10px;color:#596981;margin:13px 0 5px;font-weight:650}.formBox input,.formBox select{width:100%;height:39px;border:1px solid #dfe4eb;border-radius:8px;padding:0 10px;background:#fff;color:var(--ink);font-size:12px}.formBox input::placeholder{color:#a4adba}.routesLine,.row{display:grid;grid-template-columns:1fr 1fr;gap:9px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.muted{color:#8290a3;font-size:10px}.formHint{border-top:1px solid #edf0f4;margin:15px 0 0;padding-top:12px;line-height:1.55}.tableScroll{overflow:auto;margin-top:15px}table{width:100%;border-collapse:collapse;font-size:11px;text-align:left}th,td{border-bottom:1px solid #edf0f4;text-align:left;padding:11px 9px;vertical-align:top}th{color:#748197;background:#f8f9fb;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;white-space:nowrap}td{color:#384860}tr:last-child td{border-bottom:0}tbody tr:hover{background:#fafbfc}.pill{display:inline-block;border-radius:6px;background:#eef2f7;color:#52647c;padding:4px 7px;margin:1px;font-size:9px;font-weight:600;white-space:nowrap}.pill.off{background:#fcebea;color:#a3443d}
-    .loginScreen{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:24px;background:linear-gradient(135deg,#101d33,#263959)}.loginCard{width:min(420px,100%);padding:32px;border:1px solid #ffffff20;border-radius:20px;background:#fff;box-shadow:0 28px 80px #07112170}.loginBrand{display:flex;align-items:center;gap:11px;margin-bottom:26px}.loginMark{width:43px;height:43px;border-radius:13px;background:linear-gradient(145deg,#ffb34e,#ef841a);display:grid;place-items:center;color:white;font-weight:850}.loginBrand b{display:block;font-size:14px}.loginBrand span{display:block;margin-top:3px;color:#8390a2;font-size:10px}.loginCard h1{margin:0;color:#17243b;font-size:22px;letter-spacing:-.04em}.loginCard p{margin:7px 0 20px;color:#718096;font-size:12px;line-height:1.55}.loginCard label{display:block;margin:13px 0 5px;color:#596981;font-size:11px;font-weight:650}.loginCard input{width:100%;height:43px;padding:0 11px;border:1px solid #dfe4eb;border-radius:9px;background:white;color:#17243b;font-size:13px}.loginCard button{width:100%;height:43px;margin-top:18px;border:0;border-radius:9px;background:#ee8a22;color:white;font-size:13px;font-weight:700}.loginCard button:disabled{opacity:.65;cursor:wait}.loginError{min-height:18px;margin-top:9px;color:#bd4c43;font-size:11px}.sessionUser{font-size:11px;color:#718096}
+    .loginScreen{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:24px;background:linear-gradient(135deg,#101d33,#263959)}.loginCard{width:min(420px,100%);padding:32px;border:1px solid #ffffff20;border-radius:20px;background:#fff;box-shadow:0 28px 80px #07112170}.loginBrand{display:flex;align-items:center;gap:11px;margin-bottom:26px}.loginMark{width:43px;height:43px;border-radius:13px;background:linear-gradient(145deg,#ffb34e,#ef841a);display:grid;place-items:center;color:white;font-weight:850}.loginBrand b{display:block;font-size:14px}.loginBrand span{display:block;margin-top:3px;color:#8390a2;font-size:10px}.loginCard h1{margin:0;color:#17243b;font-size:22px;letter-spacing:-.04em}.loginCard p{margin:7px 0 20px;color:#718096;font-size:12px;line-height:1.55}.loginCard label{display:block;margin:13px 0 5px;color:#596981;font-size:11px;font-weight:650}.loginCard input{width:100%;height:43px;padding:0 11px;border:1px solid #dfe4eb;border-radius:9px;background:white;color:#17243b;font-size:13px}.loginCard button{width:100%;height:43px;margin-top:18px;border:0;border-radius:9px;background:#ee8a22;color:white;font-size:13px;font-weight:700}.loginCard button:disabled{opacity:.65;cursor:wait}.loginError{min-height:18px;margin-top:9px;color:#bd4c43;font-size:11px}.rememberSession{display:flex!important;align-items:center;gap:8px;margin-top:14px!important}.rememberSession input{width:15px;height:15px;margin:0;accent-color:#ee8a22}.rememberSession span{font-weight:500}.sessionUser{font-size:11px;color:#718096}
     .loginScreen[hidden],#navAdmin[hidden]{display:none}
     .drawer{position:fixed;right:0;top:0;width:470px;max-width:min(100vw,470px);height:100vh;background:#fff;border-left:1px solid #e1e6ed;box-shadow:-18px 0 50px #14223924;display:none;flex-direction:column;z-index:10}.drawer.open{display:flex}.drawer header{position:relative;min-height:100px;display:block;padding:22px 68px 16px 22px;border-bottom:1px solid #edf0f4;background:#fff}.drawer header h1{font-size:19px;letter-spacing:-.03em;margin:0;color:var(--ink)}.drawer .sub{font-size:11px;margin-top:5px}.drawerBody{padding:18px 22px 28px;overflow:auto}.kv{display:grid;grid-template-columns:120px 1fr;gap:12px;font-size:11px;line-height:1.5;margin:0;padding:9px 0;border-bottom:1px solid #f0f2f5}.kv span:first-child{color:#8290a3}.kv span:last-child{color:#34445d;font-weight:540;overflow-wrap:anywhere}.panel{border-top:1px solid #edf0f4;margin-top:19px;padding-top:16px}.panel h2{font-size:12px;color:#34445d;margin:0 0 10px;font-weight:700}.drawer input,.drawer select,.drawer textarea{min-width:0;width:100%;height:39px;border:1px solid #dfe4eb;border-radius:8px;padding:0 10px;background:#fff;color:var(--ink);font-size:11px}.drawer input::placeholder,.drawer textarea::placeholder{color:#9ba6b5}.drawer textarea{height:auto;min-height:76px;padding:10px;resize:vertical}.close{position:absolute;right:18px;top:18px;height:33px!important;padding:0 10px!important;font-size:10px!important}
     .view:not(.active){display:none!important}
@@ -49,6 +49,7 @@
       <input id="loginEmail" name="username" autocomplete="username" required placeholder="nome.sobrenome ou e-mail">
       <label for="loginPassword">Senha</label>
       <input id="loginPassword" name="password" type="password" autocomplete="current-password" required>
+      <label class="rememberSession"><input id="rememberSession" type="checkbox"><span>Manter conectado neste dispositivo (12 horas)</span></label>
       <button id="loginSubmit" type="submit">Entrar</button>
       <div class="loginError" id="loginError" role="status" aria-live="polite"></div>
     </form>
@@ -137,6 +138,7 @@
       state.user = null;
       state.authRevision += 1;
       sessionStorage.removeItem('abrCrmSession');
+      localStorage.removeItem('abrCrmRememberedSession');
       state.funnels = [];
       state.board = null;
       state.active = null;
@@ -155,12 +157,18 @@
       $('sessionUser').textContent = '';
       $('navAdmin').hidden = true;
     }
-    async function startApp(session) {
+    async function startApp(session, rememberSession = false) {
       state.authToken = session.token;
       state.user = session.user;
       state.authRevision += 1;
       const revision = state.authRevision;
-      sessionStorage.setItem('abrCrmSession', session.token);
+      if (rememberSession) {
+        localStorage.setItem('abrCrmRememberedSession', session.token);
+        sessionStorage.removeItem('abrCrmSession');
+      } else {
+        localStorage.removeItem('abrCrmRememberedSession');
+        sessionStorage.setItem('abrCrmSession', session.token);
+      }
       $('loginScreen').hidden = true;
       $('sessionUser').textContent = session.user.name || session.user.email;
       $('navAdmin').hidden = !['admin', 'supervisor'].includes(session.user.role);
@@ -173,13 +181,14 @@
       const button = $('loginSubmit');
       button.disabled = true;
       $('loginError').textContent = '';
+      const rememberSession = $('rememberSession').checked;
       try {
         const session = await json('/v1/auth/login', {
           method: 'POST',
           body: JSON.stringify({ email: $('loginEmail').value.trim(), password: $('loginPassword').value })
         });
         $('loginPassword').value = '';
-        await startApp(session);
+        await startApp(session, rememberSession);
       } catch (err) {
         showLogin(err.message === 'invalid_credentials' ? 'Usuário ou senha inválidos.' : `Não foi possível entrar: ${err.message}`);
       } finally {
@@ -517,10 +526,12 @@
     $('discardClose').onclick = closeDrawer;
     $('saveCase').onclick = saveCase;
     $('drawer').addEventListener('click', ev => { if (ev.target === $('drawer')) closeDrawer(); });
-    const existingToken = sessionStorage.getItem('abrCrmSession');
+    const rememberedToken = localStorage.getItem('abrCrmRememberedSession');
+    const existingToken = rememberedToken || sessionStorage.getItem('abrCrmSession');
+    $('rememberSession').checked = !!rememberedToken;
     if (existingToken) {
       state.authToken = existingToken;
-      json('/v1/auth/me').then(({ user }) => startApp({ token: existingToken, user })).catch(() => showLogin());
+      json('/v1/auth/me').then(({ user }) => startApp({ token: existingToken, user }, !!rememberedToken)).catch(() => showLogin());
     } else {
       showLogin();
     }
