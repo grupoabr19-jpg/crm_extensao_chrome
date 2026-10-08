@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "CRM Grupo ABR",
+  "version": "0.1.0",
+  "description": "CRM sobre o WhatsApp Web (piloto, instalação unpacked).",
+  "minimum_chrome_version": "116",
+  "permissions": ["storage"],
+  "host_permissions": ["https://web.whatsapp.com/*", "https://API_DOMAIN_PLACEHOLDER/*"],
+  "background": { "service_worker": "dist/service-worker.js", "type": "module" },
+  "content_scripts": [{ "matches": ["https://web.whatsapp.com/*"], "js": ["dist/content.js"], "run_at": "document_idle" }],
+  "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'self'" }
+}

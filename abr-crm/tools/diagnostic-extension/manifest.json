@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "ABR Diagnóstico WhatsApp Web (somente leitura)",
+  "version": "0.1.0",
+  "description": "Mede o que a interface do WhatsApp Web permite observar. Não envia, não escreve e não faz requisições de rede.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://web.whatsapp.com/*"],
+  "content_scripts": [
+    { "matches": ["https://web.whatsapp.com/*"], "js": ["probe.js", "panel.js"], "run_at": "document_idle" }
+  ]
+}
