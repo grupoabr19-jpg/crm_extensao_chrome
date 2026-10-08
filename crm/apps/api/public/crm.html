@@ -115,6 +115,9 @@
     </div>
   </dialog>
   <script>
+    if (new URLSearchParams(location.search).has('password') || new URLSearchParams(location.search).has('username')) {
+      history.replaceState(null, '', location.pathname + location.hash);
+    }
     const api = location.origin;
     const state = { funnels: [], board: null, active: null, dragged: null, query: "", selected: null, sellers: [], authToken: "", user: null, authRevision: 0 };
     const $ = (id) => document.getElementById(id);
@@ -301,7 +304,8 @@
       `<div class="panel"><h2>Follow-up</h2><div class="row"><input id="taskTitle" placeholder="Tarefa"><input id="taskDue" type="datetime-local"></div><div class="actions"><button id="addTask">Agendar</button></div></div>
        <div class="panel"><h2>Nota interna</h2><textarea id="noteBody" placeholder="Nao vai para o WhatsApp"></textarea><div class="actions"><button id="addNote" class="secondary">Salvar nota</button></div></div>
        <div class="panel"><h2>Transferir</h2><div class="row"><input id="transferName" placeholder="Novo responsavel"><input id="transferPhone" placeholder="+5511999990001"></div><div class="actions"><button id="transferLead" class="secondary">Criar transferencia</button><button id="queueMessage" class="secondary">Preparar mensagem</button></div></div>
-       <div class="panel"><h2>Fechamento</h2><div class="row"><input id="saleValue" placeholder="Valor venda"><select id="lossReason"><option>Preco</option><option>Disponibilidade de Estoque</option><option>Condicao de Pagamento</option><option>Logistica</option><option>Outro</option></select></div><input id="lossDetail" placeholder="Detalhe perda, se houver" style="width:100%;margin-top:8px"><div class="actions"><button id="markWon">Venda ganha</button><button id="markLost" class="danger">Venda perdida</button></div></div>`;
+       <div class="panel"><h2>Fechamento</h2><div class="row"><input id="saleValue" placeholder="Valor venda"><select id="lossReason"><option>Preco</option><option>Disponibilidade de Estoque</option><option>Condicao de Pagamento</option><option>Logistica</option><option>Outro</option></select></div><input id="lossDetail" placeholder="Detalhe perda, se houver" style="width:100%;margin-top:8px"><div class="actions"><button id="markWon">Venda ganha</button><button id="markLost" class="danger">Venda perdida</button></div></div>`
+      ].join('');
       if (!$('drawer').open) $('drawer').showModal();
       $('addTask').onclick = addTask;
       $('addNote').onclick = addNote;
