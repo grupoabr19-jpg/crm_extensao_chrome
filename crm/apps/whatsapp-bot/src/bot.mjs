@@ -25,9 +25,9 @@ const config = {
   trainingFile: process.env.WHATSAPP_BOT_TRAINING_FILE || resolve(__dirname, "../training/abr-bot-training.json"),
   profileDir: process.env.WHATSAPP_BOT_PROFILE_DIR || resolve(crmRoot, ".local/whatsapp-bot-profile"),
   stateFile: process.env.WHATSAPP_BOT_STATE_FILE || resolve(crmRoot, ".local/whatsapp-bot-state.json"),
-  maxChatsPerTick: envInt("WHATSAPP_BOT_MAX_CHATS_PER_TICK", 3),
+  maxChatsPerTick: envInt("WHATSAPP_BOT_MAX_CHATS_PER_TICK", 1),
   respondExistingUnread: envBool("WHATSAPP_BOT_RESPOND_EXISTING_UNREAD", false),
-  scanRecentForCommands: envBool("WHATSAPP_BOT_SCAN_RECENT_FOR_COMMANDS", true),
+  scanRecentForCommands: envBool("WHATSAPP_BOT_SCAN_RECENT_FOR_COMMANDS", false),
   maxRecentCommandChats: envInt("WHATSAPP_BOT_MAX_RECENT_COMMAND_CHATS", 8),
   sellerCacheMs: envInt("WHATSAPP_BOT_SELLER_CACHE_MS", 5 * 60 * 1000),
   transferLockMs: envInt("WHATSAPP_BOT_TRANSFER_LOCK_MS", 12 * 60 * 60 * 1000)
@@ -116,7 +116,6 @@ async function tick(page) {
     if (!bootstrappedUnread && !config.respondExistingUnread) {
       await bootstrapUnreadChats(page, chats);
       bootstrappedUnread = true;
-      if (config.scanRecentForCommands) await scanRecentTransferCommands(page);
       return;
     }
     let handled = 0;
@@ -144,7 +143,7 @@ async function tick(page) {
 
 async function bootstrapUnreadChats(page, chats) {
   log("Primeiro ciclo: registrando conversas antigas sem responder automaticamente.");
-  for (const chat of chats.slice(0, Math.max(config.maxRecentCommandChats, config.maxChatsPerTick))) {
+  for (const chat of chats.slice(0, config.maxChatsPerTick)) {
     const snapshot = await openAndReadChat(page, chat);
     if (!snapshot) continue;
     const key = chatKey(snapshot);

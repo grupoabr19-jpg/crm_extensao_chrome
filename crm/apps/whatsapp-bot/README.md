@@ -46,4 +46,6 @@ Antes da transferencia, o Abraão encerra o contato com o cliente usando a frase
 
 Comandos manuais como `transferir para Pietra`, `passar para Marcelo Silva` ou `encaminha para Rafael Pereira` consultam os operadores ativos do CRM. A transferencia so acontece quando o operador encontrado tem WhatsApp cadastrado na aba Perfil.
 
+No modo de lista, o bot prioriza o topo do WhatsApp Web, onde chegam as mensagens novas. Por padrao ele processa apenas um chat por ciclo (`WHATSAPP_BOT_MAX_CHATS_PER_TICK=1`) e nao varre conversas recentes antigas (`WHATSAPP_BOT_SCAN_RECENT_FOR_COMMANDS=false`).
+
 O bot do WhatsApp roda localmente em Chromium/Playwright e usa o `crm/.env` local. As variaveis `WHATSAPP_BOT_*` nao precisam estar no Render, a menos que o bot seja executado la tambem. No Render ficam apenas os secrets do backend, como banco de dados, autenticacao e chave da IA.
