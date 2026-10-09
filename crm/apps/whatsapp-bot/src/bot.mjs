@@ -29,6 +29,7 @@ const config = {
   respondExistingUnread: envBool("WHATSAPP_BOT_RESPOND_EXISTING_UNREAD", false),
   scanRecentForCommands: envBool("WHATSAPP_BOT_SCAN_RECENT_FOR_COMMANDS", true),
   maxRecentCommandChats: envInt("WHATSAPP_BOT_MAX_RECENT_COMMAND_CHATS", 8),
+  sellerCacheMs: envInt("WHATSAPP_BOT_SELLER_CACHE_MS", 5 * 60 * 1000),
   transferLockMs: envInt("WHATSAPP_BOT_TRANSFER_LOCK_MS", 12 * 60 * 60 * 1000)
 };
 
@@ -41,6 +42,7 @@ const training = loadTraining(config.trainingFile);
 let authToken = "";
 let emptyActiveChatNotified = false;
 let bootstrappedUnread = false;
+let sellerCache = { expiresAt: 0, items: [] };
 
 async function main() {
   if (!config.enabled) {
@@ -148,9 +150,10 @@ async function bootstrapUnreadChats(page, chats) {
     const key = chatKey(snapshot);
     const fingerprint = incomingFingerprint(snapshot);
     seen.set(key, fingerprint);
-    if (hasTransferToPietraCommand(snapshot.messages) && !isHandledTransfer(snapshot)) {
+    const transferTarget = await transferTargetFromMessages(snapshot.messages);
+    if (transferTarget && !isHandledTransfer(snapshot)) {
       const customerPhone = customerPhoneFromSnapshot(snapshot);
-      if (customerPhone) await transferToPietra(page, snapshot, customerPhone);
+      if (customerPhone) await transferContact(page, snapshot, customerPhone, transferTarget);
       continue;
     }
     markAwaitingCustomer(snapshot);
@@ -168,8 +171,9 @@ async function handleConversation(page, snapshot) {
   }
   log(`Triando: ${snapshot.chatTitle} (${customerPhone}; ${incoming.length} msg recebidas)`);
 
-  if (hasTransferToPietraCommand(snapshot.messages)) {
-    await transferToPietra(page, snapshot, customerPhone);
+  const transferTarget = await transferTargetFromMessages(snapshot.messages);
+  if (transferTarget) {
+    await transferContact(page, snapshot, customerPhone, transferTarget);
     return true;
   }
 
@@ -216,13 +220,13 @@ async function handleConversation(page, snapshot) {
   return true;
 }
 
-async function transferToPietra(page, snapshot, customerPhone) {
+async function transferContact(page, snapshot, customerPhone, target) {
   if (isHandledTransfer(snapshot, customerPhone)) {
     log(`Transferencia ja processada para este comando: ${snapshot.chatTitle}`);
     return;
   }
   markHandledTransfer(snapshot, customerPhone);
-  log(`Comando detectado: transferir para ${config.pietraName}. Criando ficha e handoff...`);
+  log(`Comando detectado: transferir para ${target.name}. Criando ficha e handoff...`);
   let casePayload = {};
   try {
     const triage = await postJson("/v1/ai/triage", {
@@ -240,7 +244,7 @@ async function transferToPietra(page, snapshot, customerPhone) {
 
   const phone = casePayload.phone || customerPhone;
   if (!phone) {
-    await maybeSend(page, "Para eu transferir para a Pietra, preciso confirmar o telefone do cliente.", "telefone necessario");
+    await maybeSend(page, `Para eu transferir para ${target.name}, preciso confirmar o telefone do cliente.`, "telefone necessario");
     markCooldown(snapshot);
     markAwaitingCustomer(snapshot);
     return;
@@ -255,20 +259,20 @@ async function transferToPietra(page, snapshot, customerPhone) {
     department: casePayload.department || "Vendas",
     pipeline: casePayload.pipeline || "VAREJO",
     stage: casePayload.stage || "Novo Lead",
-    responsibleName: config.pietraName,
-    responsiblePhone: config.pietraPhone,
-    nextTask: "Pietra assumir atendimento transferido pela IA"
+    responsibleName: target.name,
+    responsiblePhone: target.phone,
+    nextTask: `${target.name} assumir atendimento transferido pela IA`
   });
   const handoff = created.handoff || {};
   const message = handoff.message || created.outbox?.payload?.message || "";
   const destinationPhone = handoff.destination_phone || created.outbox?.payload?.destination_phone || "";
   if (message && destinationPhone) {
-    const closingSent = await maybeSend(page, customerTransferClosing(handoff.destination_name || config.pietraName), "encerramento antes da transferencia");
+    const closingSent = await maybeSend(page, customerTransferClosing(handoff.destination_name || target.name), "encerramento antes da transferencia");
     if (!closingSent && config.mode !== "dry-run") return;
-    await sendToPhone(page, destinationPhone, message, `handoff para ${config.pietraName}`);
+    await sendToPhone(page, destinationPhone, message, `handoff para ${target.name}`);
     markCooldown(snapshot);
     markAwaitingCustomer(snapshot);
-    log(`Ficha criada: ${created.case?.protocol || created.case?.id || "sem protocolo"}; destino=${config.pietraName}`);
+    log(`Ficha criada: ${created.case?.protocol || created.case?.id || "sem protocolo"}; destino=${target.name}`);
   } else if (message) {
     log(`Ficha criada, mas sem telefone de destino para envio automatico: ${created.case?.protocol || created.case?.id || "sem protocolo"}`);
   } else {
@@ -295,15 +299,17 @@ async function scanRecentTransferCommands(page) {
   const chats = await findRecentChats(page);
   for (const chat of chats.slice(0, config.maxRecentCommandChats)) {
     const snapshot = await openAndReadChat(page, chat);
-    if (!snapshot || !hasTransferToPietraCommand(snapshot.messages)) continue;
+    if (!snapshot) continue;
+    const transferTarget = await transferTargetFromMessages(snapshot.messages);
+    if (!transferTarget) continue;
     const customerPhone = customerPhoneFromSnapshot(snapshot);
     if (isHandledTransfer(snapshot, customerPhone)) continue;
     if (!customerPhone) {
-      log(`Comando para Pietra ignorado sem telefone confiavel: ${snapshot.chatTitle || "sem titulo"}`);
+      log(`Comando para ${transferTarget.name} ignorado sem telefone confiavel: ${snapshot.chatTitle || "sem titulo"}`);
       markHandledTransfer(snapshot, customerPhone);
       continue;
     }
-    await transferToPietra(page, snapshot, customerPhone);
+    await transferContact(page, snapshot, customerPhone, transferTarget);
     break;
   }
 }
@@ -509,6 +515,62 @@ async function loginCrm() {
   return result.token;
 }
 
+async function getTransferTargets() {
+  if (sellerCache.expiresAt > Date.now()) return sellerCache.items;
+  const data = await getJson("/v1/sellers");
+  const items = (Array.isArray(data.items) ? data.items : [])
+    .filter((seller) => seller?.active !== false && seller.whatsapp_e164)
+    .map((seller) => ({
+      name: String(seller.name || seller.display_name || "").trim(),
+      email: String(seller.email || "").trim(),
+      phone: seller.whatsapp_e164
+    }))
+    .filter((seller) => seller.name && seller.phone);
+  if (config.pietraPhone && !items.some((seller) => normalizePhoneDigits(seller.phone) === normalizePhoneDigits(config.pietraPhone))) {
+    items.push({ name: config.pietraName, email: "", phone: config.pietraPhone });
+  }
+  sellerCache = { expiresAt: Date.now() + config.sellerCacheMs, items };
+  return items;
+}
+
+async function transferTargetFromMessages(messages) {
+  const command = latestTransferCommand(messages);
+  if (!command) return null;
+  const targets = await getTransferTargets();
+  const target = matchTransferTarget(command, targets);
+  if (!target) {
+    log(`Comando de transferencia sem operador com telefone cadastrado: ${command.slice(0, 180)}`);
+  }
+  return target;
+}
+
+function matchTransferTarget(command, targets) {
+  const text = normalizeTextLocal(command);
+  if (!text || !targets.length) return null;
+  const fullMatches = targets.filter((target) => {
+    const name = normalizeTextLocal(target.name);
+    const emailUser = normalizeTextLocal(String(target.email || "").split("@")[0].replace(/[._-]+/g, " "));
+    return (name && text.includes(name)) || (emailUser && text.includes(emailUser));
+  });
+  if (fullMatches.length === 1) return fullMatches[0];
+  if (fullMatches.length > 1) return null;
+
+  const firstNameCounts = new Map();
+  for (const target of targets) {
+    const first = normalizeTextLocal(target.name).split(/\s+/)[0];
+    if (first) firstNameCounts.set(first, (firstNameCounts.get(first) || 0) + 1);
+  }
+  const firstMatches = targets.filter((target) => {
+    const first = normalizeTextLocal(target.name).split(/\s+/)[0];
+    return first && firstNameCounts.get(first) === 1 && textWords(text).includes(first);
+  });
+  return firstMatches.length === 1 ? firstMatches[0] : null;
+}
+
+function textWords(text) {
+  return normalizeTextLocal(text).split(/[^A-Z0-9]+/).filter(Boolean);
+}
+
 async function postJson(path, body, authenticated = true) {
   const headers = { "content-type": "application/json" };
   if (authenticated && authToken) headers.authorization = `Bearer ${authToken}`;
@@ -517,6 +579,21 @@ async function postJson(path, body, authenticated = true) {
     headers,
     body: JSON.stringify(body)
   });
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : {};
+  if (!response.ok) {
+    const error = new Error(data.error || response.statusText);
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+  return data;
+}
+
+async function getJson(path, authenticated = true) {
+  const headers = {};
+  if (authenticated && authToken) headers.authorization = `Bearer ${authToken}`;
+  const response = await fetch(`${config.apiBase}${path}`, { headers });
   const text = await response.text();
   const data = text ? JSON.parse(text) : {};
   if (!response.ok) {
@@ -622,7 +699,7 @@ function chatKey(snapshot) {
 }
 
 function isCoolingDown(key, snapshot) {
-  if (hasTransferToPietraCommand(snapshot.messages)) return false;
+  if (hasTransferCommand(snapshot.messages)) return false;
   return (cooldowns.get(key) || 0) > Date.now();
 }
 
@@ -685,7 +762,7 @@ function transferCommandFingerprint(snapshot) {
     .filter((message) => message.direction === "in")
     .slice(-8)
     .map((message) => normalizeTextLocal(message.text))
-    .filter((text) => /TRANSFERIR|TRANSFERE|PASSA|PASSAR|ENCAMINH/.test(text) && /PIETRA/.test(text))
+    .filter((text) => isTransferText(text))
     .join("|");
 }
 
@@ -702,11 +779,19 @@ function incomingFingerprint(snapshot) {
     .join("|");
 }
 
-function hasTransferToPietraCommand(messages) {
-  return messages.slice(-8).some((message) => {
-    const text = normalizeTextLocal(message.text);
-    return /TRANSFERIR|TRANSFERE|PASSA|PASSAR|ENCAMINH/.test(text) && /PIETRA/.test(text);
+function hasTransferCommand(messages) {
+  return Boolean(latestTransferCommand(messages));
+}
+
+function latestTransferCommand(messages) {
+  const found = messages.slice(-8).reverse().find((message) => {
+    return message.direction === "in" && isTransferText(normalizeTextLocal(message.text));
   });
+  return found?.text || "";
+}
+
+function isTransferText(text) {
+  return /TRANSFERIR|TRANSFERE|PASSA|PASSAR|ENCAMINH/.test(text);
 }
 
 function qualificationSummary(messages) {
@@ -715,7 +800,7 @@ function qualificationSummary(messages) {
     .slice(-8)
     .map((message) => message.text)
     .filter(Boolean);
-  return useful.length ? `Resumo automatico para transferencia:\n${useful.join("\n")}`.slice(0, 1000) : "Transferencia solicitada para Pietra.";
+  return useful.length ? `Resumo automatico para transferencia:\n${useful.join("\n")}`.slice(0, 1000) : "Transferencia solicitada.";
 }
 
 function normalizeTextLocal(value) {
@@ -728,6 +813,10 @@ function normalizeTextLocal(value) {
 
 function nameFromTitle(title) {
   return /^\+?[\d\s().-]+$/.test(String(title || "").trim()) ? "" : String(title || "").trim();
+}
+
+function normalizePhoneDigits(value) {
+  return String(value || "").replace(/\D/g, "");
 }
 
 function sleep(ms) {

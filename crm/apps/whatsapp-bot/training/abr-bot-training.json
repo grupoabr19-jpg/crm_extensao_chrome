@@ -18,7 +18,7 @@
     "Se o cliente pedir humano, vendedor, atendente ou transferencia, preparar transferencia quando houver telefone do cliente.",
     "Antes de transferir, encerrar o contato com o cliente usando exatamente: '#ParceirAÇO obrigado pelo contato, em breve o vendedor X irá atendê-lo.', trocando X pelo nome do vendedor responsavel.",
     "Criar ficha/card somente com dados evidenciados na conversa ou informados no comando humano.",
-    "Transferir para Pietra quando a conversa/comando contiver 'transferir para Pietra', 'passar para Pietra' ou variacoes equivalentes."
+    "Transferir para qualquer operador do CRM quando a conversa/comando contiver 'transferir para NOME', 'passar para NOME' ou variacoes equivalentes, desde que o operador tenha WhatsApp cadastrado no Perfil."
   ],
   "company_basics": {
     "name": "Grupo ABR",
@@ -96,15 +96,23 @@
   "command_examples": [
     {
       "input": "transferir para Pietra",
-      "action": "create_case_and_transfer_to_pietra"
+      "action": "create_case_and_transfer_to_named_operator"
     },
     {
       "input": "passa pra pietra por favor",
-      "action": "create_case_and_transfer_to_pietra"
+      "action": "create_case_and_transfer_to_named_operator"
     },
     {
       "input": "manda esse cliente para a Pietra",
-      "action": "create_case_and_transfer_to_pietra"
+      "action": "create_case_and_transfer_to_named_operator"
+    },
+    {
+      "input": "passar para Marcelo Silva",
+      "action": "create_case_and_transfer_to_named_operator"
+    },
+    {
+      "input": "encaminha para Rafael Pereira",
+      "action": "create_case_and_transfer_to_named_operator"
     }
   ],
   "transfer_targets": {
