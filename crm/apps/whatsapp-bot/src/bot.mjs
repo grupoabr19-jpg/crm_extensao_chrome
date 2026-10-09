@@ -109,7 +109,7 @@ async function tick(page) {
       continue;
     }
     await page.waitForTimeout(600);
-    const snapshot = await readOpenChat(page);
+    const snapshot = withChatCandidate(await readOpenChat(page), chat);
     if (!snapshot.messages.length) {
       log(`Chat aberto sem mensagens legiveis: ${snapshot.chatTitle || "sem titulo"}; candidates=${snapshot.candidateCount || 0}`);
       continue;
@@ -446,6 +446,18 @@ function phoneFromTitle(title) {
 
 function customerPhoneFromSnapshot(snapshot) {
   return snapshot.chatPhone || phoneFromTitle(snapshot.chatTitle);
+}
+
+function withChatCandidate(snapshot, chat) {
+  const candidateTitle = String(chat?.title || "").trim();
+  if (!candidateTitle) return snapshot;
+  const currentTitle = String(snapshot.chatTitle || "").trim();
+  const genericTitle = /^(conta comercial|business account|clique para mostrar|click to view)/i.test(currentTitle);
+  return {
+    ...snapshot,
+    chatTitle: currentTitle && !genericTitle ? currentTitle : candidateTitle,
+    chatPhone: snapshot.chatPhone || phoneFromTitle(candidateTitle)
+  };
 }
 
 function chatKey(snapshot) {
