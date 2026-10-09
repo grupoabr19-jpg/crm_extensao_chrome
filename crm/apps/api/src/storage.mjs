@@ -85,8 +85,14 @@ function inferSalesFunction(input) {
   const allowed = new Set(["adm_sdr", "vendedor_externo", "especialista", "corporativo", "construcao_civil"]);
   if (allowed.has(explicit)) return explicit;
   const text = normalizeText([input.segment, input.department, input.need, input.pipeline].filter(Boolean).join(" "));
+  if (/(GRANDE|GRANDES|MEDIA|MEDIAS|MEDIO PORTE|INDUSTRIA|INDUSTRIAL|REVENDA|REVENDAS|REVENDEDOR|REVENDEDORES|DISTRIBUIDOR|DISTRIBUIDORES)/.test(text)) {
+    return "corporativo";
+  }
+  if (/(PEQUENA|PEQUENAS|PEQUENO PORTE|SERRALHEIRO|SERRALHEIROS|CALHEIRO|CALHEIROS|PESSOA FISICA|PF|CLIENTE FINAL)/.test(text)) {
+    return "especialista";
+  }
   if (/(CONSTRUCAO|CONSTRUTORA|OBRA|CIVIL|ENGENHARIA)/.test(text)) return "construcao_civil";
-  if (/(CORPORATIVO|INDUSTRIA|INDUSTRIAL|TRANSPORTE|MANUTENCAO)/.test(text)) return "corporativo";
+  if (/(CORPORATIVO|TRANSPORTE|MANUTENCAO)/.test(text)) return "corporativo";
   if (/(ESPECIALISTA|TECNICO|TECNICA|PROJETO)/.test(text)) return "especialista";
   return "vendedor_externo";
 }
@@ -263,9 +269,15 @@ const POTENTIAL_CITY_REGION = new Map(Object.entries({
   "RIO CLARO": "CAMBUI"
 }));
 
+const NEARBY_10KM_CITY_REGION = new Map(Object.entries({
+  CAMBUI: "CAMBUI",
+  "CONCEICAO DAS PEDRAS": "POUSO ALEGRE",
+  JESUANIA: "POUSO ALEGRE"
+}));
+
 function inferRegion(input) {
   const city = normalizeText(input.city);
-  return normalizeText(input.region || CITY_REGION.get(city) || POTENTIAL_CITY_REGION.get(city) || city || "CAMBUI");
+  return normalizeText(input.region || CITY_REGION.get(city) || NEARBY_10KM_CITY_REGION.get(city) || city || "CAMBUI");
 }
 
 export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessage }) {
@@ -800,9 +812,10 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       limit 1
     `, [ctx.org.id, channel, wantedSalesFunction, routeType, wantedRouteValue, anyFunction]);
     let row = await tryRoute(salesFunction, routeValue);
-    if (!row && salesFunction !== "vendedor_externo") row = await tryRoute("vendedor_externo", routeValue);
+    const segmentLocked = ["corporativo", "especialista"].includes(salesFunction);
+    if (!row && salesFunction !== "vendedor_externo" && !segmentLocked) row = await tryRoute("vendedor_externo", routeValue);
     if (!row && channel === "varejo") row = await tryRoute(salesFunction, "CAMBUI");
-    if (!row && channel === "varejo") row = await tryRoute("vendedor_externo", "CAMBUI");
+    if (!row && channel === "varejo" && !segmentLocked) row = await tryRoute("vendedor_externo", "CAMBUI");
     if (!row && channel === "varejo") row = await tryRoute(null, "CAMBUI", true);
     if (!row) return null;
     return { ...row, channel, salesFunction: row.sales_function || salesFunction, routeType: row.route_type || routeType, routeValue: row.route_value || routeValue };

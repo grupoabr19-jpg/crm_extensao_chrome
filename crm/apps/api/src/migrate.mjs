@@ -65,6 +65,15 @@ try {
   await applyMigration("0008_customer_lookup_indexes", async () => {
     await client.query(readFileSync(resolve(migrationsDir, "0008_customer_lookup_indexes.sql"), "utf8"));
   });
+  await applyMigration("0009_backfill_seller_function_routes", async () => {
+    await client.query(readFileSync(resolve(migrationsDir, "0009_backfill_seller_function_routes.sql"), "utf8"));
+  });
+  await applyMigration("0010_ensure_missing_route_sellers", async () => {
+    await client.query(readFileSync(resolve(migrationsDir, "0010_ensure_missing_route_sellers.sql"), "utf8"));
+  });
+  await applyMigration("0011_fix_missing_route_seller_seed", async () => {
+    await client.query(readFileSync(resolve(migrationsDir, "0011_fix_missing_route_seller_seed.sql"), "utf8"));
+  });
   await client.query("commit");
   console.log("Migrations concluidas.");
 } catch (err) {
