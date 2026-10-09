@@ -29,3 +29,13 @@ npm run bot:whatsapp
 ```
 
 No primeiro uso, escaneie o QR Code do WhatsApp Web no Chromium aberto pelo bot. A sessao fica em `crm/.local/whatsapp-bot-profile`.
+
+## Treinamento
+
+O roteiro/base de treinamento consumido pelo bot fica em:
+
+```text
+crm/apps/whatsapp-bot/training/abr-bot-training.json
+```
+
+Esse arquivo define persona, regras comerciais, catalogo basico, perguntas permitidas e comandos de transferencia. O bot usa essa base para qualificar leads, localizar cadastro, abrir ficha no CRM e transferir para o responsavel. Ele pode confirmar categorias basicas de produtos do Grupo ABR, mas nao deve informar especificacoes tecnicas, preco, prazo, estoque, garantia, disponibilidade ou detalhes sobre Vergraf/grafeno.

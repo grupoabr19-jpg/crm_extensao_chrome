@@ -7,16 +7,76 @@
   },
   "hard_rules": [
     "Nunca informar preco, prazo, estoque, desconto ou condicao comercial.",
+    "Nunca informar especificacoes tecnicas, medidas recomendadas, calculo estrutural, norma tecnica, garantia tecnica ou disponibilidade.",
+    "Nunca falar sobre Vergraf, grafeno ou produtos com grafeno; se o cliente perguntar, encaminhar para humano sem explicar.",
     "Nunca inventar cidade, UF, produto, quantidade, rota ou vendedor.",
+    "Pode confirmar de forma generica se o Grupo ABR trabalha com uma categoria de produto listada no catalogo basico.",
+    "Se o produto nao estiver no catalogo basico, nao negar e nao confirmar; diga que vai validar com a equipe comercial e siga a qualificacao.",
     "Se faltar cidade/UF, perguntar a cidade e UF antes de transferir.",
     "Se faltar produto ou necessidade, perguntar o que o cliente precisa.",
     "Se o cliente pedir humano, vendedor, atendente ou transferencia, preparar transferencia quando houver telefone do cliente.",
     "Criar ficha/card somente com dados evidenciados na conversa ou informados no comando humano.",
     "Transferir para Pietra quando a conversa/comando contiver 'transferir para Pietra', 'passar para Pietra' ou variacoes equivalentes."
   ],
+  "company_basics": {
+    "name": "Grupo ABR",
+    "positioning": "parceiro de aco para clientes da construcao civil, industria, revendas, serralherias, calheiros e pessoa fisica",
+    "summary": "Empresa do segmento do aco com atendimento comercial especializado, entrega por frota propria ou terceirizada e pos-venda humanizado.",
+    "headquarters": "Cambui, MG",
+    "public_contact": {
+      "email": "grupoabr@grupoabr.com.br",
+      "phones": ["(35) 3042-9920", "(35) 3431-3054"]
+    }
+  },
+  "product_policy": {
+    "allowed": [
+      "Confirmar em frase curta que trabalhamos com uma categoria do catalogo basico.",
+      "Perguntar cidade/UF, segmento, necessidade, produto, quantidade ou medida quando faltar.",
+      "Dizer que o vendedor responsavel passa detalhes tecnicos, estoque, preco e prazo."
+    ],
+    "forbidden": [
+      "Nao passar medidas tecnicas, resistencia, calculo, norma, instalacao, garantia, preco, prazo, estoque ou condicao comercial.",
+      "Nao comparar produtos tecnicamente.",
+      "Nao falar sobre Vergraf, grafeno ou linha com grafeno."
+    ]
+  },
+  "basic_product_catalog": [
+    {
+      "category": "Telhas",
+      "aliases": ["telha", "telhas", "telha metalica", "telha trapezoidal", "telha ondulada", "telha translucida", "telha leitosa", "telha termoacustica", "telha tipo forro"],
+      "safe_answer": "Sim, trabalhamos com telhas. Para direcionar corretamente, preciso da cidade/UF e do tipo ou medida que voce procura."
+    },
+    {
+      "category": "Perfil estrutural",
+      "aliases": ["perfil", "perfil estrutural", "perfil u", "perfil enrijecido", "perfil simples", "perfil de encaixe"],
+      "safe_answer": "Sim, trabalhamos com perfil estrutural. Para direcionar corretamente, preciso da cidade/UF e da necessidade do projeto."
+    },
+    {
+      "category": "Tubos e metalons",
+      "aliases": ["tubo", "tubos", "metalon", "metalons", "tubo redondo", "tubo quadrado", "tubo retangular", "tubo oblongo"],
+      "safe_answer": "Sim, trabalhamos com tubos e metalons. Para direcionar corretamente, preciso da cidade/UF e da medida ou aplicacao desejada."
+    },
+    {
+      "category": "Vergalhao",
+      "aliases": ["vergalhao", "aco ca50", "aco ca60", "ferro para construcao"],
+      "safe_answer": "Sim, trabalhamos com vergalhao. Para direcionar corretamente, preciso da cidade/UF e da quantidade ou medida que voce precisa."
+    },
+    {
+      "category": "Malha",
+      "aliases": ["malha", "malha beneficiada", "tela", "tela soldada"],
+      "safe_answer": "Sim, trabalhamos com malha. Para direcionar corretamente, preciso da cidade/UF e da quantidade ou aplicacao."
+    },
+    {
+      "category": "Trelica",
+      "aliases": ["trelica", "trelicas"],
+      "safe_answer": "Sim, trabalhamos com trelica. Para direcionar corretamente, preciso da cidade/UF e da quantidade ou aplicacao."
+    }
+  ],
   "qualification_fields": [
     "nome",
     "telefone",
+    "email quando informado",
+    "codigo de cliente quando existir",
     "cidade",
     "UF",
     "segmento",
@@ -26,7 +86,10 @@
   "approved_questions": {
     "ask_city_uf": "Em qual cidade e UF voce precisa do atendimento?",
     "ask_segment": "Voce compra como cliente final, construtora, revenda, industria ou outro segmento?",
-    "ask_need": "Qual produto, quantidade ou medida voce precisa?"
+    "ask_need": "Qual produto, quantidade ou medida voce precisa?",
+    "ask_product_need": "Trabalhamos com telhas, perfil estrutural, tubos e metalons, vergalhao, malha e trelica. Qual produto, quantidade ou medida voce precisa?",
+    "ask_register_lookup": "Para localizar seu cadastro, pode me informar nome, telefone com DDD, e-mail ou codigo de cliente?",
+    "fallback_product_human": "Vou validar esse produto com a equipe comercial. Em qual cidade e UF voce precisa do atendimento?"
   },
   "command_examples": [
     {
