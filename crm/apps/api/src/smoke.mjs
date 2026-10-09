@@ -4,11 +4,15 @@ loadDotEnv();
 
 const baseUrl = (process.env.ABR_API_BASE_URL || process.env.API_BASE_URL || "http://127.0.0.1:10000").replace(/\/$/, "");
 const adminToken = process.env.API_ADMIN_TOKEN || "";
+const smokeLogin = process.env.ABR_SMOKE_LOGIN || process.env.SMOKE_LOGIN || "thiago.almeida";
+const smokePassword = process.env.ABR_SMOKE_PASSWORD || process.env.SMOKE_PASSWORD || "ABR@2026";
+let sessionToken = "";
 
 function authHeaders(extra = {}) {
   return {
     ...extra,
-    ...(adminToken ? { authorization: `Bearer ${adminToken}` } : {})
+    ...(sessionToken ? { authorization: `Bearer ${sessionToken}` } : {}),
+    ...(adminToken ? { "x-api-admin-token": adminToken } : {})
   };
 }
 
@@ -34,6 +38,16 @@ async function post(path, body) {
   });
 }
 
+async function login() {
+  const session = await post("/v1/auth/login", {
+    email: smokeLogin,
+    password: smokePassword
+  });
+  sessionToken = session.token || "";
+  if (!sessionToken) throw new Error("login did not return a session token");
+  printResult("login", { user: session.user?.email, role: session.user?.role });
+}
+
 function printResult(label, payload) {
   console.log(`${label}: OK`);
   if (payload) console.log(JSON.stringify(payload, null, 2));
@@ -44,6 +58,8 @@ async function main() {
 
   const health = await request("/healthz");
   printResult("healthz", { mode: health.mode, service: health.service });
+
+  await login();
 
   const ai = await post("/v1/ai/test", {
     prompt: "Responda somente OK para confirmar o teste tecnico do CRM ABR."

@@ -61,6 +61,7 @@
       <div class="nav-caption">Área de trabalho</div>
       <button class="active" title="Funil de vendas" id="navBoard" aria-label="Funil de vendas" aria-pressed="true"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="8" height="7" rx="1.5"/><rect x="14" y="4" width="7" height="4" rx="1.5"/><rect x="14" y="11" width="7" height="9" rx="1.5"/><rect x="3" y="14" width="8" height="6" rx="1.5"/></svg></span><span class="nav-label">Funil de vendas</span></button>
       <button title="Equipe e rotas" id="navAdmin" aria-label="Equipe e rotas" aria-pressed="false"><span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 5.5a3 3 0 0 1 0 5.8M17 14a4.7 4.7 0 0 1 3.5 4.5"/></svg></span><span class="nav-label">Equipe e rotas</span></button>
+      <button title="Meu perfil" id="navProfile" aria-label="Meu perfil" aria-pressed="false"><span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/><path d="M18.5 5.5l1.5-1.5M20 8h2M17.8 10.8l1.4 1.4"/></svg></span><span class="nav-label">Meu perfil</span></button>
       <div class="rail-spacer"></div>
       <div class="sidebar-note"><div class="sidebar-note-title">Operação comercial</div><div class="sidebar-note-copy">Acompanhe oportunidades, próximos passos e transferências em um só lugar.</div></div>
       <button class="rail-refresh" title="Atualizar dados" id="railRefresh" aria-label="Atualizar dados"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9A7 7 0 0 1 18 6l2 2M4 16l2 2a7 7 0 0 0 12.4-3"/></svg></span><span class="nav-label">Atualizar dados</span></button>
@@ -117,6 +118,30 @@
           <div class="importStatus" id="importStatus" role="status" aria-live="polite"></div>
         </section>
       </section>
+      <section class="admin view" id="profile" aria-label="Meu perfil">
+        <div class="adminIntro"><h2>Meu perfil</h2><p>Atualize seu WhatsApp de atendimento e, quando aplicável, suas rotas. A IA usa estes números para montar a transferência correta.</p></div>
+        <div class="adminGrid">
+          <div class="formBox">
+            <h2>Dados do operador</h2><p class="boxSub">Seu número precisa estar em formato brasileiro com DDD. Ex.: +55 35 99770-9232.</p>
+            <label for="profileName">Nome completo</label><input id="profileName" autocomplete="name">
+            <label for="profileEmail">Login</label><input id="profileEmail" readonly>
+            <label for="profileTitle">Título/função exibida</label><input id="profileTitle" placeholder="Ex.: Vendedor externo">
+            <label for="profileFunction">Especialidade de atendimento</label>
+            <select id="profileFunction"><option value="especialista">Especialista VARE</option><option value="corporativo">Corporativo VCORP</option><option value="vendedor_externo">Vendedor externo VEXT</option><option value="construcao_civil">Construção civil</option><option value="adm_sdr">ADM - SDR</option></select>
+            <label for="profileWhatsapp">WhatsApp de atendimento</label><input id="profileWhatsapp" placeholder="+55 35 99770-9232" inputmode="tel">
+            <div class="actions"><button class="button" id="saveProfile">Salvar perfil</button><button class="button secondary" id="reloadProfile">Recarregar</button></div>
+          </div>
+          <div class="formBox">
+            <h2>Minha rota principal</h2><p class="boxSub">Vendedores devem informar a rota atendida. Administradores/SDR podem deixar sem rota.</p>
+            <div class="routesLine">
+              <div><label for="profileRouteChannel">Canal</label><select id="profileRouteChannel"><option value="varejo">Varejo</option><option value="atacado">Atacado</option></select></div>
+              <div><label for="profileRouteType">Tipo de rota</label><select id="profileRouteType"><option value="region">Região</option><option value="city">Cidade</option><option value="ddd">DDD</option></select></div>
+            </div>
+            <label for="profileRouteValue">Região, cidade ou DDD</label><input id="profileRouteValue" placeholder="Ex.: JUNDIAI ou 35">
+            <p class="muted formHint" id="profileRouteHelp">A transferência continua sendo feita pelo backend, usando a rota e a especialidade salvas aqui.</p>
+          </div>
+        </div>
+      </section>
     </main>
   </div>
   <dialog class="drawer" id="drawer" aria-labelledby="dTitle">
@@ -135,7 +160,7 @@
       history.replaceState(null, '', location.pathname + location.hash);
     }
     const api = location.origin;
-    const state = { funnels: [], board: null, active: null, dragged: null, query: "", selected: null, sellers: [], authToken: "", user: null, authRevision: 0, searchRevision: 0, customerImportToken: "" };
+    const state = { funnels: [], board: null, active: null, dragged: null, query: "", selected: null, sellers: [], profile: null, authToken: "", user: null, authRevision: 0, searchRevision: 0, customerImportToken: "" };
     const $ = (id) => document.getElementById(id);
     const say = (m) => { const el = $('status'); el.textContent = m; el.dataset.state = String(m).startsWith('Erro:') ? 'error' : 'ok'; };
     async function json(path, opts) {
@@ -164,6 +189,7 @@
       state.query = '';
       state.selected = null;
       state.sellers = [];
+      state.profile = null;
       $('board').innerHTML = '';
       $('kpis').innerHTML = '';
       $('sellerRows').innerHTML = '';
@@ -192,6 +218,7 @@
       $('sessionUser').textContent = session.user.name || session.user.email;
       $('navAdmin').hidden = !['admin', 'supervisor'].includes(session.user.role);
       $('customerImportPanel').hidden = !['admin', 'supervisor'].includes(session.user.role);
+      await loadProfile().catch(err => say('Erro ao carregar perfil: ' + err.message));
       await loadFunnels();
       if (!state.authToken || revision !== state.authRevision) return;
       await Promise.all([loadBoard(), loadKpis(), loadReactivationAlerts()]);
@@ -258,13 +285,17 @@
     function showView(name) {
       $('board').classList.toggle('active', name === 'board');
       $('admin').classList.toggle('active', name === 'admin');
+      $('profile').classList.toggle('active', name === 'profile');
       $('navBoard').classList.toggle('active', name === 'board');
       $('navAdmin').classList.toggle('active', name === 'admin');
+      $('navProfile').classList.toggle('active', name === 'profile');
       $('navBoard').setAttribute('aria-pressed', String(name === 'board'));
       $('navAdmin').setAttribute('aria-pressed', String(name === 'admin'));
-      document.querySelector('.page-title h1').textContent = name === 'board' ? 'Funil de vendas' : 'Equipe e roteamento';
-      document.querySelector('.page-title .sub').textContent = name === 'board' ? 'Visão geral dos leads e das oportunidades em andamento' : 'Colaboradores, especialidades e distribuição regional do atendimento';
+      $('navProfile').setAttribute('aria-pressed', String(name === 'profile'));
+      document.querySelector('.page-title h1').textContent = name === 'board' ? 'Funil de vendas' : name === 'profile' ? 'Meu perfil' : 'Equipe e roteamento';
+      document.querySelector('.page-title .sub').textContent = name === 'board' ? 'Visão geral dos leads e das oportunidades em andamento' : name === 'profile' ? 'Dados de atendimento, WhatsApp e rota vinculados ao operador' : 'Colaboradores, especialidades e distribuição regional do atendimento';
       if (name === 'admin') loadSellers().catch(err => say('Erro: ' + err.message));
+      if (name === 'profile') loadProfile().catch(err => say('Erro: ' + err.message));
     }
     function renderCard(card) {
       const name = card.contact?.name || card.contact?.phone || 'Lead sem nome';
@@ -479,6 +510,46 @@
       state.sellers = data.items || [];
       renderSellers();
       say('Colaboradores atualizados.');
+    }
+    function renderProfile(profile) {
+      state.profile = profile;
+      $('profileName').value = profile.name || '';
+      $('profileEmail').value = profile.email || '';
+      $('profileTitle').value = profile.profile_title || '';
+      $('profileFunction').value = profile.sales_function || 'vendedor_externo';
+      $('profileWhatsapp').value = profile.whatsapp_e164 || '';
+      const route = (profile.routes || []).find(item => item.active !== false);
+      $('profileRouteChannel').value = route?.channel || 'varejo';
+      $('profileRouteType').value = route?.route_type || 'region';
+      $('profileRouteValue').value = route?.route_value || '';
+      $('profileRouteHelp').textContent = profile.email && profile.email.toLowerCase() === 'thiago.almeida@grupoabr.com.br'
+        ? 'Esta conta é a operadora da IA. O WhatsApp salvo aqui deve ser +55 35 99770-9232.'
+        : 'A IA consulta este número quando sua rota for escolhida para a transferência.';
+    }
+    async function loadProfile() {
+      const data = await json('/v1/profile');
+      renderProfile(data.profile || {});
+      return data.profile;
+    }
+    async function saveProfile() {
+      const routeValue = $('profileRouteValue').value.trim();
+      const body = {
+        name: $('profileName').value.trim(),
+        profileTitle: $('profileTitle').value.trim(),
+        salesFunction: $('profileFunction').value,
+        whatsapp: $('profileWhatsapp').value.trim(),
+        routes: routeValue ? [{
+          channel: $('profileRouteChannel').value,
+          salesFunction: $('profileFunction').value,
+          routeType: $('profileRouteType').value,
+          routeValue,
+          region: $('profileRouteType').value === 'region' ? routeValue : null,
+          priority: 10
+        }] : []
+      };
+      const data = await json('/v1/profile', { method: 'PATCH', body: JSON.stringify(body) });
+      renderProfile(data.profile || {});
+      say('Perfil salvo.');
     }
     async function uploadCustomerWorkbook(kind, file, token) {
       const headers = {
@@ -707,6 +778,7 @@
     }, 60000);
     $('navBoard').onclick = () => showView('board');
     $('navAdmin').onclick = () => showView('admin');
+    $('navProfile').onclick = () => showView('profile');
     $('exportBtn').onclick = async () => {
       try {
         const exportToken = state.authToken;
@@ -724,6 +796,8 @@
     };
     $('saveSeller').onclick = saveSeller;
     $('clearSeller').onclick = clearSellerForm;
+    $('saveProfile').onclick = () => saveProfile().catch(err => say('Erro ao salvar perfil: ' + err.message));
+    $('reloadProfile').onclick = () => loadProfile().then(() => say('Perfil atualizado.')).catch(err => say('Erro: ' + err.message));
     $('search').oninput = () => {
       state.query = $('search').value;
       renderBoard();

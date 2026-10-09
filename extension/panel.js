@@ -31,7 +31,12 @@
   var customerResultsItems = [];
   var authToken = '';
   var authOrigin = '';
+  var authUserEmail = '';
   var authRevision = 0;
+  var dockObserver = null;
+  var dockInterval = null;
+  var dockLayoutKey = '';
+  var dockResizeTimer = null;
   var mem = {};
   var store = (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) ? chrome.storage.local : null;
 
@@ -186,6 +191,77 @@
       need: value('need'), nextTask: value('nextTask'), saleValue: value('saleValue'),
       responsibleName: value('responsibleName'), responsiblePhone: value('responsiblePhone')
     };
+  }
+  function visibleChatMessages() {
+    var scope = document.querySelector('#main') || document;
+    var rows = Array.prototype.slice.call(scope.querySelectorAll('[data-id]')).filter(function (row) {
+      return /^(true|false)_/.test(row.getAttribute('data-id') || '');
+    }).slice(-24);
+    return rows.map(function (row, index) {
+      var rawId = row.getAttribute('data-id') || '';
+      var copyable = row.querySelector('.copyable-text') || row.querySelector('[data-pre-plain-text]') || row;
+      var text = String(copyable.textContent || '').replace(/\s+/g, ' ').trim();
+      var pre = copyable.getAttribute && copyable.getAttribute('data-pre-plain-text');
+      if (pre && text.indexOf(pre) === 0) text = text.slice(pre.length).trim();
+      return {
+        id: rawId.slice(0, 80) || 'wa' + index,
+        direction: /^true_/.test(rawId) ? 'out' : 'in',
+        text: text.slice(0, 1000)
+      };
+    }).filter(function (message) { return message.text; });
+  }
+  function applyAiCasePayload(payload) {
+    if (!payload) return;
+    if (payload.name) $('name').value = payload.name;
+    if (payload.phone) $('phone').value = payload.phone;
+    if (payload.company) $('company').value = payload.company;
+    if (payload.city) $('city').value = payload.city;
+    if (payload.uf) $('uf').value = payload.uf;
+    if (payload.segment) setFormSelect('segment', payload.segment);
+    if (payload.department) setFormSelect('department', payload.department);
+    if (payload.need) $('need').value = payload.need;
+    updateQualification();
+  }
+  function aiTriage(commit, button) {
+    if (String(authUserEmail || '').toLowerCase() !== 'thiago.almeida@grupoabr.com.br') {
+      return say('A IA opera somente na conta thiago.almeida@grupoabr.com.br.', 'warn');
+    }
+    var messages = visibleChatMessages();
+    if (!messages.length) return say('Nao encontrei mensagens legiveis no chat aberto.', 'err');
+    if (commit && !value('phone')) return say('Informe o telefone do cliente antes de criar e transferir.', 'warn');
+    button.disabled = true;
+    say(commit ? 'IA lendo, criando ficha e preparando transferencia...' : 'IA lendo mensagens visiveis...');
+    request('/v1/ai/triage', {
+      method: 'POST',
+      body: JSON.stringify(Object.assign(caseFormPayload(), {
+        messages: messages,
+        commit: !!commit
+      }))
+    }).then(function (data) {
+      setOutput(data);
+      applyAiCasePayload(data.casePayload);
+      if (data.triage && data.triage.outbound && data.triage.outbound.text) {
+        copyText(data.triage.outbound.text);
+        say('A IA precisa de mais dados; pergunta aprovada copiada para revisao.', 'warn');
+        return;
+      }
+      if (commit && data.case) {
+        activeCaseId = data.case.id;
+        if (data.handoff && data.handoff.message) copyText(data.handoff.message);
+        return loadCrmData(activeCaseId).then(function () {
+          var selectedCase = crmCases.find(function (item) { return item.id === activeCaseId; });
+          setCaseForm(selectedCase);
+          activate('case');
+          say('Ficha criada e transferencia preparada. Revise a mensagem antes de enviar.', 'ok');
+        });
+      }
+      say('Ficha preenchida pela IA. Revise antes de criar ou salvar.', 'ok');
+    }).catch(function (err) {
+      setOutput(err.data || err.message);
+      say('Falha na triagem por IA: ' + err.message, 'err');
+    }).finally(function () {
+      button.disabled = false;
+    });
   }
   function startNewCase() {
     activeCaseId = '';
@@ -398,15 +474,7 @@
   host.style.cssText = 'position:fixed;inset:0 0 auto auto;z-index:2147483647;';
   var pageTheme = document.createElement('style');
   pageTheme.id = 'abr-crm-page-theme';
-  pageTheme.textContent = [
-    '@media (min-width:1200px) and (min-height:600px) {',
-    'html.abr-crm-open body,html.abr-crm-open #app { width:calc(100vw - 488px)!important; max-width:calc(100vw - 488px)!important; min-width:0!important; box-sizing:border-box!important; transition:width .2s ease,max-width .2s ease; }',
-    'html.abr-crm-open #app #side { flex:0 0 clamp(280px,26vw,380px)!important; width:clamp(280px,26vw,380px)!important; max-width:clamp(280px,26vw,380px)!important; min-width:0!important; }',
-    'html.abr-crm-open #app #main { flex:1 1 0!important; width:auto!important; min-width:0!important; }',
-    '}',
-    'html.abr-crm-open #app #side [aria-selected="true"] { box-shadow:inset 3px 0 #ed8922!important; }',
-    '@media (prefers-reduced-motion:reduce) { html.abr-crm-open body,html.abr-crm-open #app { transition:none!important; } }'
-  ].join('');
+  pageTheme.textContent = '';
   document.head.appendChild(pageTheme);
   var sh = host.attachShadow({ mode: 'open' });
   sh.innerHTML = '<style>' + `
@@ -419,7 +487,7 @@
       '<div class="section"><h3>Funil e etapa</h3><label for="customerSearch">Cliente (nome ou código)</label><input id="customerSearch" type="search" autocomplete="off" placeholder="Buscar por nome ou C00000000" aria-controls="customerResults" aria-autocomplete="list"><div id="customerHelp" class="hint">Carregando cadastro de clientes...</div><div id="customerResults" class="customerResults" role="listbox" hidden></div><div class="grid"><div><label>Funil</label><select id="activePipeline"><option value="">Carregando funis...</option></select></div><div><label>Etapa</label><select id="activeStage" disabled><option value="">Selecione uma ficha primeiro</option></select></div></div><div class="pipe" id="pipelineSteps" aria-label="Progresso do lead no funil"></div><div class="stepLabel" id="pipelineProgressLabel">Carregando funis e fichas...</div><div class="actions"><button class="secondary" id="refreshPipeline">Atualizar ficha</button></div></div>' +
       '<div class="section"><h3>Qualificação</h3><div class="metricRow"><div class="metric"><b id="leadScore">0%</b><span>completo</span></div><div class="metric"><b id="tempLabel">Morno</b><span>temperatura</span></div><div class="metric"><b id="potLabel">Medio</b><span>potencial</span></div></div></div>' +
       '<div class="section"><h3>Contato</h3><div class="grid"><div><label>Nome</label><input id="name" placeholder="Cliente"></div><div><label>Telefone</label><input id="phone" placeholder="+5511999999999"></div><div><label>Empresa</label><input id="company"></div><div><label>Origem</label><select id="source"><option>Não informado</option><option>Instagram</option><option>Facebook</option><option>LinkedIn</option><option>Google</option><option>Feiras/Eventos</option></select></div><div><label>Cidade</label><input id="city"></div><div><label>UF</label><input id="uf" maxlength="2"></div></div></div>' +
-      '<div class="section"><h3>Negócio</h3><div class="grid"><div><label>Segmento</label><select id="segment"><option></option><option>Cliente Final</option><option>Construtoras</option><option>Deposito (Armadores)</option><option>Distribuidores</option><option>Industria de Transformacao</option><option>Revendedores</option><option>Revendas</option><option>Construcao Civil</option><option>Arquitetura</option><option>Pedreiro</option></select></div><div><label>Departamento</label><select id="department"><option>Vendas</option><option>Financeiro</option><option>Expedicao</option><option>SAC</option><option>Pos-venda</option></select></div><div><label>Funil</label><select id="pipeline"><option>VAREJO</option><option>ATACADO</option><option>Pos-Venda</option><option>Reativacao</option><option>Liderancas</option></select></div><div><label>Etapa</label><select id="stage"><option>Novo Lead</option><option>Contato</option><option>Qualificacao</option><option>Cotacao</option><option>Venda ganha</option><option>Venda perdida</option></select></div><div><label>Potencial</label><select id="potential"><option>Medio</option><option>Baixo</option><option>Alto</option><option>Conta-chave</option><option>Nao classificado</option></select></div><div><label>Temperatura</label><select id="temperature"><option>Morno</option><option>Quente</option><option>Frio</option><option>Nao classificado</option></select></div><div class="full"><label>Necessidade / resumo da triagem</label><textarea id="need" placeholder="Produto, quantidade, medidas, contexto e restricoes informadas pelo cliente"></textarea></div><div><label>Responsavel</label><input id="responsibleName" value="Vendedor ABR"></div><div><label>WhatsApp responsavel</label><input id="responsiblePhone" placeholder="+5511999990001"></div><div><label>Proxima tarefa</label><input id="nextTask" placeholder="Retornar, cotar, confirmar dados..."></div><div><label>Valor estimado interno</label><input id="saleValue" placeholder="Nao preencher se desconhecido"></div></div><div class="chips"><span class="chip good">Humano pode assumir</span><span class="chip">IA supervisionada</span><span class="chip hot">Nao prometer preco/prazo</span></div><div class="actions"><button id="createCase">Criar ficha + link</button><button class="secondary" id="listCases">Listar fichas</button></div></div>' +
+      '<div class="section"><h3>Negócio</h3><div class="grid"><div><label>Segmento</label><select id="segment"><option></option><option>Cliente Final</option><option>Construtoras</option><option>Deposito (Armadores)</option><option>Distribuidores</option><option>Industria de Transformacao</option><option>Revendedores</option><option>Revendas</option><option>Construcao Civil</option><option>Arquitetura</option><option>Pedreiro</option></select></div><div><label>Departamento</label><select id="department"><option>Vendas</option><option>Financeiro</option><option>Expedicao</option><option>SAC</option><option>Pos-venda</option></select></div><div><label>Funil</label><select id="pipeline"><option>VAREJO</option><option>ATACADO</option><option>Pos-Venda</option><option>Reativacao</option><option>Liderancas</option></select></div><div><label>Etapa</label><select id="stage"><option>Novo Lead</option><option>Contato</option><option>Qualificacao</option><option>Cotacao</option><option>Venda ganha</option><option>Venda perdida</option></select></div><div><label>Potencial</label><select id="potential"><option>Medio</option><option>Baixo</option><option>Alto</option><option>Conta-chave</option><option>Nao classificado</option></select></div><div><label>Temperatura</label><select id="temperature"><option>Morno</option><option>Quente</option><option>Frio</option><option>Nao classificado</option></select></div><div class="full"><label>Necessidade / resumo da triagem</label><textarea id="need" placeholder="Produto, quantidade, medidas, contexto e restricoes informadas pelo cliente"></textarea></div><div><label>Responsavel</label><input id="responsibleName" value="Vendedor ABR"></div><div><label>WhatsApp responsavel</label><input id="responsiblePhone" placeholder="+5511999990001"></div><div><label>Proxima tarefa</label><input id="nextTask" placeholder="Retornar, cotar, confirmar dados..."></div><div><label>Valor estimado interno</label><input id="saleValue" placeholder="Nao preencher se desconhecido"></div></div><div class="chips"><span class="chip good">Humano pode assumir</span><span class="chip">IA supervisionada</span><span class="chip hot">Nao prometer preco/prazo</span></div><div class="actions"><button id="aiFill" class="secondary">IA preencher</button><button id="aiCreate" class="secondary">IA criar + transferir</button><button id="createCase">Criar ficha + link</button><button class="secondary" id="listCases">Listar fichas</button></div></div>' +
     '</div>' +
     '<div class="view" id="dest"><div class="section"><h3>Fila do responsavel</h3><label>Telefone destino</label><input id="destinationPhone" placeholder="+5511999990001"><div class="actions"><button id="pending">Buscar pendentes</button><button class="secondary" id="refreshPend">Atualizar</button></div><div id="handoffs"></div></div></div>' +
     '<div class="view" id="tasks"><div class="section"><h3>Notas e tarefas</h3><label>Nota interna</label><textarea id="note" placeholder="Nao vai para o WhatsApp"></textarea><label>Tarefa</label><input id="task" placeholder="Ex.: ligar amanha as 9h"><div class="actions"><button class="secondary" id="holdAi">Pausar IA</button><button class="secondary" id="resumeAi">Retomar triagem</button><button class="ghost" id="finish">Concluir</button></div><div class="hint">MVP local: notas e tarefas ficam no painel ate a proxima recarga.</div></div></div>' +
@@ -441,7 +509,7 @@
       '<label>Potenciais</label><textarea id="cfgPotentialOptions" class="configOptions"></textarea>' +
       '<label>Temperaturas</label><textarea id="cfgTemperatureOptions" class="configOptions"></textarea>' +
       '<div class="actions"><button class="secondary" id="save">Salvar todas as configurações</button><button class="ghost" id="resetConfig">Restaurar padrões</button></div></div></div>' +
-    '<div class="view" id="diag"><div class="section"><h3>Leitura observacional</h3><p class="muted">Coleta estrutura e contagens anonimizadas do WhatsApp. O relatório é enviado à API CRM; não coleta o texto das mensagens nem envia mensagens.</p><label>Cenario</label><select id="scenario"><option value="mvp-chat-aberto">chat aberto</option><option value="mvp-sem-conversa">sem conversa aberta</option><option value="mvp-observacao">janela de observacao</option></select><div class="actions"><button id="snapshot">Capturar estrutura</button><button class="secondary" id="observe">Observar 15s</button></div></div></div>' +
+    '<div class="view" id="diag"><div class="section"><h3>Leitura observacional</h3><p class="muted">Coleta estrutura e contagens anonimizadas do WhatsApp. O relatório é enviado à API CRM; não coleta o texto das mensagens nem envia mensagens.</p><label>Cenario</label><select id="scenario"><option value="mvp-chat-aberto">chat aberto</option><option value="mvp-sem-conversa">sem conversa aberta</option><option value="mvp-observacao">janela de observacao</option></select><div class="actions"><button id="snapshot">Capturar estrutura</button><button class="secondary" id="observe">Observar 15s</button><button class="secondary" id="layoutDiag">Diagnosticar layout</button></div></div></div>' +
     '<textarea id="out" readonly></textarea></div></div></section>' +
     '<nav class="rail" aria-label="Navegação do CRM"><div class="brand" title="Grupo ABR"><span class="brandFallback">ABR</span><img src="' + chrome.runtime.getURL('brand-logo.png') + '" alt=""></div>' +
     '<button class="railBtn active" data-tab="case" title="Ficha do lead" aria-label="Ficha do lead" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3.5" width="16" height="17" rx="2"/><circle cx="12" cy="9" r="2.5"/><path d="M8 16.5a4 4 0 0 1 8 0"/></svg></button>' +
@@ -459,7 +527,7 @@
   document.documentElement.appendChild(host);
   sh.querySelector('.brand img').addEventListener('error', function () { this.style.display = 'none'; });
   sh.querySelector('style').textContent +=
-    '[hidden]{display:none!important}.loginGate{position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;padding:24px;background:rgba(10,20,37,.78);backdrop-filter:blur(8px);pointer-events:auto}.loginCard{width:min(360px,100%);padding:26px;border:1px solid #e5eaf1;border-radius:18px;background:#fff;box-shadow:0 24px 70px #09132466;color:#19263b}.loginCard h2{margin:0;font-size:21px;letter-spacing:-.04em}.loginCard p{margin:7px 0 19px;color:#758398;font-size:12px;line-height:1.55}.loginCard label{display:block;margin:12px 0 6px;color:#52627a;font-size:11px;font-weight:650}.loginCard input{width:100%;height:42px;padding:0 11px;border:1px solid #dfe4eb;border-radius:9px;background:#fff;color:#19263b;font-size:13px}.loginCard button{width:100%;height:42px;margin-top:17px;border:0;border-radius:9px;background:#ed8922;color:#fff;font-size:13px;font-weight:700;cursor:pointer}.loginCard button:disabled{opacity:.65;cursor:wait}.loginError{min-height:18px;margin-top:9px;color:#b95048;font-size:11px}';
+    '[hidden]{display:none!important}:host,:host *{font-family:Arial,"Segoe UI",sans-serif!important}select{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.grid>div{min-width:0}.loginGate{position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;padding:24px;background:rgba(10,20,37,.78);backdrop-filter:blur(8px);pointer-events:auto}.loginCard{width:min(360px,100%);padding:26px;border:1px solid #e5eaf1;border-radius:18px;background:#fff;box-shadow:0 24px 70px #09132466;color:#19263b}.loginCard h2{margin:0;font-size:21px;letter-spacing:-.04em}.loginCard p{margin:7px 0 19px;color:#758398;font-size:12px;line-height:1.55}.loginCard label{display:block;margin:12px 0 6px;color:#52627a;font-size:11px;font-weight:650}.loginCard input{width:100%;height:42px;padding:0 11px;border:1px solid #dfe4eb;border-radius:9px;background:#fff;color:#19263b;font-size:13px}.loginCard button{width:100%;height:42px;margin-top:17px;border:0;border-radius:9px;background:#ed8922;color:#fff;font-size:13px;font-weight:700;cursor:pointer}.loginCard button:disabled{opacity:.65;cursor:wait}.loginError{min-height:18px;margin-top:9px;color:#b95048;font-size:11px}';
   var loginGate = document.createElement('div');
   loginGate.className = 'loginGate';
   loginGate.innerHTML = '<form class="loginCard" id="loginForm"><h2>Entrar no CRM ABR</h2><p>Acesse com seu usuário corporativo. As fichas só serão carregadas após a autenticação.</p><label for="loginEmail">E-mail ou usuário</label><input id="loginEmail" name="username" autocomplete="username" required placeholder="nome.sobrenome ou e-mail"><label for="loginPassword">Senha</label><input id="loginPassword" name="password" type="password" autocomplete="current-password" required><button id="loginSubmit" type="submit">Entrar</button><div class="loginError" id="loginError" role="status" aria-live="polite"></div></form>';
@@ -475,6 +543,7 @@
     }).then(function (session) {
       authToken = session.token;
       authOrigin = apiOrigin();
+      authUserEmail = session.user && session.user.email || '';
       authRevision += 1;
       var savedSession = { token: authToken, origin: authOrigin };
       if (store) {
@@ -506,8 +575,150 @@
   newCaseButton.textContent = 'Nova ficha';
   $('listCases').parentElement.insertBefore(newCaseButton, $('listCases'));
   newCaseButton.onclick = startNewCase;
+  function clearWhatsAppLayoutMarks() {
+    dockLayoutKey = '';
+    Array.prototype.forEach.call(document.querySelectorAll('.abr-crm-wa-chat-list-shell'), function (node) {
+      node.classList.remove('abr-crm-wa-chat-list-shell');
+      node.style.removeProperty('width');
+      node.style.removeProperty('max-width');
+      node.style.removeProperty('min-width');
+      node.style.removeProperty('flex-basis');
+      node.style.removeProperty('overflow');
+      node.style.removeProperty('box-sizing');
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.abr-crm-wa-width-fixed,.abr-crm-wa-width-forced'), function (node) {
+      node.classList.remove('abr-crm-wa-width-fixed');
+      node.classList.remove('abr-crm-wa-width-forced');
+      if (node.getAttribute('data-abr-crm-inline-width') === '1') {
+        var oldStyle = node.getAttribute('data-abr-crm-old-style');
+        node.removeAttribute('data-abr-crm-inline-width');
+        node.removeAttribute('data-abr-crm-old-style');
+        if (oldStyle !== null) {
+          node.setAttribute('style', oldStyle);
+        } else {
+          node.removeAttribute('style');
+        }
+      }
+    });
+  }
+  function markWhatsAppChatListShell(open, force) {
+    if (!open || window.innerWidth < 1200 || window.innerHeight < 600) {
+      if (dockLayoutKey) clearWhatsAppLayoutMarks();
+      return;
+    }
+    var pane = document.querySelector('#pane-side');
+    if (!pane) {
+      if (dockLayoutKey) clearWhatsAppLayoutMarks();
+      return;
+    }
+    var limit = Math.min(380, Math.max(280, Math.round(window.innerWidth * 0.26)));
+    var paneRect = pane.getBoundingClientRect();
+    var main = document.querySelector('#main');
+    var mainRect = main ? main.getBoundingClientRect() : null;
+    if (mainRect && mainRect.left > paneRect.left + 260) {
+      limit = Math.min(limit, Math.max(260, Math.floor(mainRect.left - paneRect.left)));
+    }
+    var key = [
+      window.innerWidth,
+      window.innerHeight,
+      Math.round(paneRect.left),
+      Math.round(mainRect ? mainRect.left : 0),
+      limit
+    ].join(':');
+    if (!force && key === dockLayoutKey) return;
+    clearWhatsAppLayoutMarks();
+    dockLayoutKey = key;
+    var node = pane;
+    var marked = 0;
+    while (node && node !== document.body && node.id !== 'app') {
+      if (node.querySelector && node.querySelector('#main')) break;
+      var nodeRect = node.getBoundingClientRect();
+      if (Math.abs(nodeRect.left - paneRect.left) > 6) break;
+      if (node !== pane && nodeRect.width > limit + 80) break;
+      node.classList.add('abr-crm-wa-chat-list-shell');
+      node.style.setProperty('width', limit + 'px', 'important');
+      node.style.setProperty('max-width', limit + 'px', 'important');
+      node.style.setProperty('min-width', '0', 'important');
+      node.style.setProperty('flex-basis', limit + 'px', 'important');
+      node.style.setProperty('overflow', 'hidden', 'important');
+      node.style.setProperty('box-sizing', 'border-box', 'important');
+      marked++;
+      node = node.parentElement;
+    }
+    if (!marked) {
+      pane.classList.add('abr-crm-wa-chat-list-shell');
+      pane.style.setProperty('width', limit + 'px', 'important');
+      pane.style.setProperty('max-width', limit + 'px', 'important');
+      pane.style.setProperty('min-width', '0', 'important');
+      pane.style.setProperty('overflow', 'hidden', 'important');
+      pane.style.setProperty('box-sizing', 'border-box', 'important');
+    }
+  }
+  function layoutDiagnostic() {
+    var pane = document.querySelector('#pane-side');
+    var main = document.querySelector('#main');
+    var limit = Math.min(380, Math.max(280, Math.round(window.innerWidth * 0.26)));
+    var readNode = function (node) {
+      if (!node) return null;
+      var rect = node.getBoundingClientRect();
+      var style = window.getComputedStyle(node);
+      return {
+        tag: node.tagName,
+        id: node.id || '',
+        className: String(node.className || '').slice(0, 120),
+        width: Math.round(rect.width),
+        left: Math.round(rect.left),
+        right: Math.round(rect.right),
+        display: style.display,
+        position: style.position,
+        flex: style.flex,
+        widthStyle: style.width,
+        minWidth: style.minWidth,
+        maxWidth: style.maxWidth,
+        inlineStyle: (node.getAttribute('style') || '').slice(0, 220)
+      };
+    };
+    var ancestors = [];
+    var node = pane;
+    while (node && ancestors.length < 8) {
+      ancestors.push(readNode(node));
+      node = node.parentElement;
+    }
+    var wide = [];
+    if (pane) {
+      Array.prototype.forEach.call(pane.querySelectorAll('div,section,header,footer,nav,ul,li,a,button,input,[role="row"],[role="grid"],[role="listbox"],[tabindex]'), function (child) {
+        if (wide.length >= 30) return;
+        var rect = child.getBoundingClientRect();
+        if (rect.width > limit + 8) wide.push(readNode(child));
+      });
+    }
+    return {
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      expectedLimit: limit,
+      htmlOpen: document.documentElement.classList.contains('abr-crm-open'),
+      pane: readNode(pane),
+      main: readNode(main),
+      app: readNode(document.querySelector('#app')),
+      ancestors: ancestors,
+      wideChildren: wide
+    };
+  }
+  function startDockWatch() {
+    if (dockInterval) clearInterval(dockInterval);
+    dockInterval = null;
+    if (dockObserver) dockObserver.disconnect();
+    dockObserver = null;
+  }
+  function stopDockWatch() {
+    if (dockInterval) clearInterval(dockInterval);
+    dockInterval = null;
+    if (dockObserver) dockObserver.disconnect();
+    dockObserver = null;
+  }
   function syncPageDock(open) {
-    document.documentElement.classList.toggle('abr-crm-open', open);
+    document.documentElement.classList.remove('abr-crm-open');
+    clearWhatsAppLayoutMarks();
+    stopDockWatch();
   }
   syncPageDock(true);
 
@@ -614,6 +825,12 @@
     }
     if (ev.key === 'Escape' && $('drawer').classList.contains('open')) $('collapse').click();
   });
+  window.addEventListener('resize', function () {
+    clearTimeout(dockResizeTimer);
+    dockResizeTimer = setTimeout(function () {
+      clearWhatsAppLayoutMarks();
+    }, 220);
+  });
   Array.prototype.forEach.call(sh.querySelectorAll('input,select,textarea'), function (el) {
     var label = el.previousElementSibling;
     if (!el.hasAttribute('aria-label') && label && label.tagName === 'LABEL') el.setAttribute('aria-label', label.textContent.trim());
@@ -646,7 +863,8 @@
       authToken = session.token;
       authOrigin = session.origin;
       authRevision += 1;
-      request('/v1/auth/me').then(function () {
+      request('/v1/auth/me').then(function (data) {
+        authUserEmail = data.user && data.user.email || '';
         loginGate.hidden = true;
         return loadCrmData(activeCaseId);
       }).then(function (data) {
@@ -663,6 +881,7 @@
   function clearSession(showGate) {
     authToken = '';
     authOrigin = '';
+    authUserEmail = '';
     authRevision += 1;
     if (store && typeof store.remove === 'function') store.remove(AUTH_KEY);
     crmCases = [];
@@ -679,8 +898,6 @@
     renderCustomerResults([], '');
     $('note').value = '';
     $('task').value = '';
-    $('transferName').value = '';
-    $('transferPhone').value = '';
     if (showGate) {
       loginGate.hidden = false;
       $('loginPassword').value = '';
@@ -784,6 +1001,8 @@
       button.textContent = activeCaseId ? 'Salvar alterações' : 'Criar ficha + link';
     });
   };
+  $('aiFill').onclick = function () { aiTriage(false, this); };
+  $('aiCreate').onclick = function () { aiTriage(true, this); };
   $('listCases').onclick = function () {
     loadCrmData(activeCaseId).then(function (data) {
       setOutput({ items: data.cases, total: data.cases.length });
@@ -834,5 +1053,13 @@
     }).then(function (data) { setOutput(data); say('Observacao enviada.', 'ok'); })
       .catch(function (err) { say('Falha na observacao: ' + err.message, 'err'); })
       .finally(function () { button.disabled = false; });
+  };
+  $('layoutDiag').onclick = function () {
+    try {
+      setOutput(layoutDiagnostic());
+      say('Diagnostico de layout capturado no painel.', 'ok');
+    } catch (err) {
+      say('Falha ao diagnosticar layout: ' + err.message, 'err');
+    }
   };
 })();

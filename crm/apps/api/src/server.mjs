@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isPlaceholderConnectionString, loadDotEnv } from "./env.mjs";
+import { buildCasePayload, callGroqTriage, guardTriageOutput, normalizeTriageMessages } from "./ai-triage.mjs";
 import { parseImageDataUrl } from "./ai-vision.mjs";
 import { parseInactiveCustomers, parseProductionHistory } from "./customer-import.mjs";
 import { makeMemoryStorage, makePostgresStorage } from "./storage.mjs";
@@ -320,6 +321,23 @@ async function handler(req, res) {
       return send(res, 200, { user: userFromRequest(req) });
     }
 
+    if (req.method === "GET" && url.pathname === "/v1/profile") {
+      const user = userFromRequest(req);
+      await storage.ready();
+      const result = await storage.getProfile(user.sub);
+      if (result.error === "user_not_found") return send(res, 404, result);
+      return send(res, 200, result);
+    }
+
+    if (req.method === "PATCH" && url.pathname === "/v1/profile") {
+      const user = userFromRequest(req);
+      const body = await readBody(req);
+      await storage.ready();
+      const result = await storage.updateProfile(user.sub, body);
+      if (result.error === "user_not_found") return send(res, 404, result);
+      return send(res, 200, result);
+    }
+
     if (req.method === "GET" && url.pathname === "/v1/bootstrap") {
       await storage.ready();
       return send(res, 200, await storage.bootstrap());
@@ -341,6 +359,37 @@ async function handler(req, res) {
       if (image.error) return send(res, image.error === "image_required" ? 400 : 422, image);
       const result = await runGroqVisionTest(image.dataUrl);
       return send(res, result.status || 200, result);
+    }
+
+    if (req.method === "POST" && url.pathname === "/v1/ai/triage") {
+      const user = requireRoles(req, res, ["admin", "supervisor", "sdr"]);
+      if (!user) return;
+      if (String(user.email || "").toLowerCase() !== "thiago.almeida@grupoabr.com.br") {
+        return send(res, 403, { error: "ai_operator_restricted", allowed_email: "thiago.almeida@grupoabr.com.br" });
+      }
+      const body = await readBody(req, 2 * 1024 * 1024);
+      if (!body || typeof body !== "object" || Array.isArray(body)) return send(res, 400, { error: "invalid_request_body" });
+      const messages = normalizeTriageMessages(body);
+      if (!messages.length) return send(res, 422, { error: "triage_messages_required" });
+      const modelResult = body.modelOutput
+        ? { ok: true, model: "provided", content: body.modelOutput, usage: null }
+        : await callGroqTriage({ body, messages });
+      if (!modelResult.ok) return send(res, modelResult.offline ? 503 : 502, modelResult);
+      const triage = guardTriageOutput(modelResult.content, messages, {
+        neutralMessage: "Vou registrar sua solicitacao para a equipe. Nao consigo informar valores ou prazos.",
+        minConfidence: body.minConfidence
+      });
+      const payload = buildCasePayload({ body, guard: triage });
+      const response = { ok: triage.ok, model: modelResult.model, usage: modelResult.usage, triage, casePayload: payload };
+      if (body.commit === true) {
+        if (triage.humanNeeded || triage.action !== "request_routing") return send(res, 409, { ...response, error: "triage_not_ready_for_routing" });
+        await storage.ready();
+        const created = await storage.createCase(payload);
+        if (created.error) return send(res, created.error === "invalid_phone" || created.error === "invalid_sale_value" ? 422 : 400, { ...response, ...created });
+        const queued = await storage.queueHandoffMessage(created.case.id);
+        return send(res, 201, { ...response, ...created, outbox: queued.command || queued });
+      }
+      return send(res, 200, response);
     }
 
     if (req.method === "POST" && url.pathname === "/v1/tests/transfer") {

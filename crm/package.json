@@ -13,6 +13,7 @@
     "start": "npm run api:start",
     "api:dev": "npm run dev --workspace @abr/api",
     "api:start": "npm run start --workspace @abr/api",
+    "bot:whatsapp": "npm run start --workspace @abr/whatsapp-bot",
     "db:migrate": "npm run db:migrate --workspace @abr/api",
     "smoke:test": "npm run smoke:test --workspace @abr/api",
     "test": "vitest run",

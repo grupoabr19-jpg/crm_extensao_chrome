@@ -250,6 +250,30 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
     authenticateUser: async () => {
       return { error: "invalid_credentials" };
     },
+    getProfile: async (userId) => {
+      const user = db.users.find((item) => item.id === userId);
+      if (!user) return { error: "user_not_found" };
+      const seller = db.sellers.find((item) => item.user_id === userId || item.email === user.email) || {};
+      return { profile: { user_id: user.id, email: user.email || null, name: user.name, role: user.role, ...seller, routes: seller.routes || [] } };
+    },
+    updateProfile: async (userId, body) => {
+      const user = db.users.find((item) => item.id === userId);
+      if (!user) return { error: "user_not_found" };
+      user.name = String(body.name || body.displayName || user.name).slice(0, 120);
+      const whatsapp = normalizePhone(body.whatsapp || body.whatsapp_e164 || "");
+      let seller = db.sellers.find((item) => item.user_id === userId || item.email === user.email);
+      if (!seller) {
+        seller = { id: randomUUID(), profile_id: randomUUID(), user_id: userId, email: user.email || "", routes: [] };
+        db.sellers.unshift(seller);
+      }
+      seller.name = user.name;
+      seller.role = user.role;
+      seller.profile_title = body.profileTitle || body.profile_title || seller.profile_title || "Vendedor";
+      seller.sales_function = inferSalesFunction(body);
+      seller.whatsapp_e164 = whatsapp.ok ? whatsapp.e164 : null;
+      seller.routes = Array.isArray(body.routes) ? body.routes : seller.routes || [];
+      return { profile: seller };
+    },
     listSellers: async () => ({ items: db.sellers, total: db.sellers.length }),
     createSeller: async (body) => {
       const seller = {
@@ -588,9 +612,9 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
     }
     const triageDept = await ensureDepartment(org.id, "Triagem");
     const salesDept = await ensureDepartment(org.id, "Vendas");
-    const triageUser = await ensureUser(org.id, "mvp-triagem@abr.local", "Triagem ABR", "sdr");
+    const triageUser = await ensureUser(org.id, "thiago.almeida@grupoabr.com.br", "Thiago Almeida", "admin");
     const sellerUser = await ensureUser(org.id, "mvp-vendedor@abr.local", "Vendedor ABR", "seller");
-    const mainAccount = await ensureAccount(org.id, "+5511999990000", "Principal ABR MVP", "main");
+    const mainAccount = await ensureAccount(org.id, "+5535997709232", "Thiago Almeida - IA ABR", "main");
     const sellerAccount = await ensureAccount(org.id, "+5511999990001", "Vendedor ABR MVP", "employee");
     await ensureUserDepartment(triageUser.id, triageDept.id);
     await ensureUserDepartment(sellerUser.id, salesDept.id);
@@ -622,6 +646,31 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
     const found = await one("select id from user_account_bindings where account_id=$1 and revoked_at is null", [accountId]);
     if (found) return found;
     return one("insert into user_account_bindings(organization_id,user_id,account_id,verified_at) values($1,$2,$3,now()) returning id", [orgId, userId, accountId]);
+  }
+  async function profileForUser(userId) {
+    const ctx = await ready();
+    const row = await one(`
+      select u.id user_id, u.email, u.display_name name, u.role,
+        sp.id profile_id, sp.profile_title, sp.sales_function, sp.whatsapp_e164, sp.active,
+        coalesce(json_agg(json_build_object(
+          'id', sr.id,
+          'channel', sr.channel,
+          'sales_function', sr.sales_function,
+          'route_type', sr.route_type,
+          'route_value', sr.route_value,
+          'region', sr.region,
+          'priority', sr.priority,
+          'active', sr.active
+        ) order by sr.channel, sr.sales_function, sr.priority, sr.route_value) filter (where sr.id is not null), '[]') routes
+      from users u
+      left join seller_profiles sp on sp.user_id=u.id and sp.organization_id=u.organization_id
+      left join seller_routes sr on sr.profile_id=sp.id and sr.active=true
+      where u.organization_id=$1 and u.id=$2
+      group by u.id, sp.id
+      limit 1
+    `, [ctx.org.id, userId]);
+    if (!row) return { error: "user_not_found" };
+    return { profile: row };
   }
   async function findRoutedSeller(ctx, input) {
     const channel = normalizeText(input.pipeline) === "ATACADO" ? "atacado" : "varejo";
@@ -869,6 +918,47 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       `, [ctx.org.id, email, password]);
       if (!user) return { error: "invalid_credentials" };
       return { user };
+    },
+    getProfile: async (userId) => profileForUser(userId),
+    updateProfile: async (userId, body) => {
+      const ctx = await ready();
+      const existing = await one("select id, email, role from users where organization_id=$1 and id=$2", [ctx.org.id, userId]);
+      if (!existing) return { error: "user_not_found" };
+      const displayName = String(body.name || body.displayName || "").trim().slice(0, 120);
+      if (displayName) await pool.query("update users set display_name=$2 where id=$1", [userId, displayName]);
+      const salesFunction = inferSalesFunction(body);
+      const profileTitle = String(body.profileTitle || body.profile_title || (salesFunction === "adm_sdr" ? "ADM - SDR" : "Vendedor")).slice(0, 120);
+      const whatsapp = normalizePhone(body.whatsapp || body.whatsapp_e164 || "");
+      const profile = await one(`
+        insert into seller_profiles(organization_id,user_id,profile_title,sales_function,whatsapp_e164,active)
+        values($1,$2,$3,$4,$5,true)
+        on conflict (organization_id,user_id) do update
+          set profile_title=excluded.profile_title,
+              sales_function=excluded.sales_function,
+              whatsapp_e164=excluded.whatsapp_e164,
+              active=true
+        returning id
+      `, [ctx.org.id, userId, profileTitle, salesFunction, whatsapp.ok ? whatsapp.e164 : null]);
+      if (whatsapp.ok) {
+        const kind = existing.email.toLowerCase() === "thiago.almeida@grupoabr.com.br" ? "main" : "employee";
+        const account = await ensureAccount(ctx.org.id, whatsapp.e164, displayName || existing.email, kind);
+        await ensureBinding(ctx.org.id, userId, account.id);
+      }
+      if (Array.isArray(body.routes)) {
+        await pool.query("update seller_routes set active=false where profile_id=$1", [profile.id]);
+        for (const route of body.routes) {
+          const channel = String(route.channel || "varejo").toLowerCase() === "atacado" ? "atacado" : "varejo";
+          const routeSalesFunction = inferSalesFunction({ salesFunction: route.salesFunction || route.sales_function || salesFunction });
+          const routeType = ["region", "city", "ddd"].includes(route.routeType || route.route_type) ? (route.routeType || route.route_type) : (channel === "atacado" ? "ddd" : "region");
+          const routeValue = normalizeText(route.routeValue || route.route_value || route.region || route.ddd || route.city);
+          if (!routeValue || routeSalesFunction === "adm_sdr") continue;
+          await pool.query(`
+            insert into seller_routes(organization_id,profile_id,channel,sales_function,route_type,route_value,region,priority,active)
+            values($1,$2,$3,$4,$5,$6,$7,$8,true)
+          `, [ctx.org.id, profile.id, channel, routeSalesFunction, routeType, routeValue, route.region || null, Number(route.priority || 10)]);
+        }
+      }
+      return profileForUser(userId);
     },
     simulateRouting: async (body) => {
       const ctx = await ready();
