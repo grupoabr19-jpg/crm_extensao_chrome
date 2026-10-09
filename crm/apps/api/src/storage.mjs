@@ -875,7 +875,7 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       join contact_identifiers i on i.organization_id=c.organization_id and i.contact_id=c.id and i.kind='phone'
       where c.organization_id=$1
         and right(regexp_replace(i.e164,'\\D','','g'), $2)=right($3, $2)
-      order by i.reliable desc, c.updated_at desc nulls last, c.created_at desc
+      order by i.reliable desc, c.created_at desc
       limit 1
     `, [orgId, phoneDigits.length, phoneDigits]) : null;
     if (byPhone) return byPhone;
@@ -883,7 +883,7 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       select id, display_name, customer_code, customer_profile, 'email' as match_source
       from contacts
       where organization_id=$1 and lower(coalesce(customer_profile->>'email',''))=$2
-      order by updated_at desc nulls last, created_at desc
+      order by created_at desc
       limit 1
     `, [orgId, email]) : null;
     if (byEmail) return byEmail;
@@ -891,7 +891,7 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       select id, display_name, customer_code, customer_profile, 'name' as match_source
       from contacts
       where organization_id=$1 and lower(display_name)=lower($2)
-      order by updated_at desc nulls last, created_at desc
+      order by created_at desc
       limit 1
     `, [orgId, exactName]) : null;
     return byName || null;
@@ -910,8 +910,7 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       await pool.query(`
         update contacts
         set display_name=coalesce(nullif(display_name,''), $2),
-            customer_profile=case when $3::text is null then customer_profile else customer_profile || jsonb_build_object('email',$3::text) end,
-            updated_at=now()
+            customer_profile=case when $3::text is null then customer_profile else customer_profile || jsonb_build_object('email',$3::text) end
         where id=$1
       `, [contact.id, name || null, email || null]);
     }
