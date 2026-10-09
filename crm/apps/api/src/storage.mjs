@@ -62,6 +62,17 @@ function normalizeText(value) {
     .toUpperCase();
 }
 
+function normalizeEmail(value) {
+  const email = String(value || "").trim().toLowerCase();
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ? email : "";
+}
+
+function phoneDigitsForLookup(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (digits.startsWith("55") && (digits.length === 12 || digits.length === 13)) return digits.slice(2);
+  return digits.length === 10 || digits.length === 11 ? digits : "";
+}
+
 function dddFromPhone(raw) {
   const phone = normalizePhone(raw || "");
   if (!phone.ok) return null;
@@ -161,8 +172,100 @@ const CITY_REGION = new Map(Object.entries({
   "CORREGO DO BOM JESUS": "CAMBUI"
 }));
 
+const POTENTIAL_CITY_REGION = new Map(Object.entries({
+  GUARULHOS: "BRAGANCA",
+  "SANTA ISABEL": "BRAGANCA",
+  IGARATA: "BRAGANCA",
+  ARUJA: "BRAGANCA",
+  ITAQUAQUECETUBA: "BRAGANCA",
+  SUZANO: "BRAGANCA",
+  "MOGI DAS CRUZES": "BRAGANCA",
+  GUARAREMA: "BRAGANCA",
+  "BIRITIBA MIRIM": "BRAGANCA",
+  "SANTA BRANCA": "BRAGANCA",
+  SALESOPOLIS: "BRAGANCA",
+  BERTIOGA: "BRAGANCA",
+  "SAO PAULO": "BRAGANCA",
+  "SAO CAETANO DO SUL": "BRAGANCA",
+  "SANTO ANDRE": "BRAGANCA",
+  DIADEMA: "BRAGANCA",
+  MAUA: "BRAGANCA",
+  "SAO BERNARDO DO CAMPO": "BRAGANCA",
+  JACAREI: "BRAGANCA",
+  "RIBEIRAO PIRES": "BRAGANCA",
+  "SAO JOSE DOS CAMPOS": "BRAGANCA",
+  CUBATAO: "BRAGANCA",
+  "SAO VICENTE": "BRAGANCA",
+  SANTOS: "BRAGANCA",
+  "PRAIA GRANDE": "BRAGANCA",
+  GUARUJA: "BRAGANCA",
+  VALINHOS: "JUNDIAI",
+  LOUVEIRA: "JUNDIAI",
+  CAMPINAS: "JUNDIAI",
+  BARUERI: "JUNDIAI",
+  INDAIATUBA: "JUNDIAI",
+  JANDIRA: "JUNDIAI",
+  SALTO: "JUNDIAI",
+  ITU: "JUNDIAI",
+  HORTOLANDIA: "JUNDIAI",
+  "SAO ROQUE": "JUNDIAI",
+  "MONTE MOR": "JUNDIAI",
+  SUMARE: "JUNDIAI",
+  "NOVA ODESSA": "JUNDIAI",
+  AMERICANA: "JUNDIAI",
+  SOROCABA: "JUNDIAI",
+  VOTORANTIM: "JUNDIAI",
+  BOITUVA: "JUNDIAI",
+  TATUI: "JUNDIAI",
+  PIRACICABA: "JUNDIAI",
+  OSASCO: "JUNDIAI",
+  LIMEIRA: "JUNDIAI",
+  CHARQUEADA: "JUNDIAI",
+  NEPOMUCENO: "VARGINHA",
+  "CARMO DA CACHOEIRA": "VARGINHA",
+  LAVRAS: "VARGINHA",
+  FORMIGA: "VARGINHA",
+  "SOLEDADE DE MINAS": "POUSO ALEGRE",
+  CRUZILIA: "POUSO ALEGRE",
+  AIURUOCA: "POUSO ALEGRE",
+  ANDRELANDIA: "POUSO ALEGRE",
+  "AGUAS DE LINDOIA": "POUSO ALEGRE",
+  "ESPIRITO SANTO DO PINHAL": "POUSO ALEGRE",
+  "CAMPO DO MEIO": "POCOS DE CALDAS",
+  SERRANIA: "POCOS DE CALDAS",
+  "AGUAS DA PRATA": "POCOS DE CALDAS",
+  "SAO JOAO DA BOA VISTA": "POCOS DE CALDAS",
+  GUAXUPE: "POCOS DE CALDAS",
+  MOCOCA: "POCOS DE CALDAS",
+  "WENCESLAU BRAZ": "ITAJUBA",
+  PIRANGUCU: "ITAJUBA",
+  "SANTO ANTONIO DO PINHAL": "ITAJUBA",
+  "PASSA QUATRO": "ITAJUBA",
+  "CAMPOS DO JORDAO": "ITAJUBA",
+  LORENA: "ITAJUBA",
+  CRUZEIRO: "ITAJUBA",
+  GUARATINGUETA: "ITAJUBA",
+  TAUBATE: "ITAJUBA",
+  "MONTE ALEGRE DO SUL": "EXTREMA",
+  AMPARO: "EXTREMA",
+  TUIUTI: "EXTREMA",
+  LINDOIA: "EXTREMA",
+  ITAPIRA: "EXTREMA",
+  PEDREIRA: "EXTREMA",
+  JAGUARIUNA: "EXTREMA",
+  "MOGI MIRIM": "EXTREMA",
+  HOLAMBRA: "EXTREMA",
+  "ARTUR NOGUEIRA": "EXTREMA",
+  "TOCOS DO MOJI": "CAMBUI",
+  "SANTO ANTONIO DE POSSE": "CAMBUI",
+  CONCHAL: "CAMBUI",
+  ARARAS: "CAMBUI",
+  "RIO CLARO": "CAMBUI"
+}));
+
 function inferRegion(input) {
-  return normalizeText(input.region || CITY_REGION.get(normalizeText(input.city)) || input.city);
+  const city = normalizeText(input.city);
+  return normalizeText(input.region || CITY_REGION.get(city) || POTENTIAL_CITY_REGION.get(city) || city || "CAMBUI");
 }
 
 export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessage }) {
@@ -678,7 +781,7 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
     const routeType = channel === "atacado" ? "ddd" : "region";
     const routeValue = channel === "atacado" ? (String(input.ddd || "").replace(/\D/g, "") || dddFromPhone(input.phone)) : inferRegion(input);
     if (!routeValue) return null;
-    const row = await one(`
+    const tryRoute = async (wantedSalesFunction, wantedRouteValue, anyFunction = false) => one(`
       select sp.id profile_id, sp.profile_title, sp.sales_function, sp.whatsapp_e164,
         u.id user_id, u.display_name seller_name, u.email,
         sr.channel, sr.route_type, sr.route_value, sr.region, sr.priority
@@ -689,14 +792,20 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
         and sr.active=true
         and sp.active=true
         and sr.channel=$2
-        and sr.sales_function=$3
+        and ($3::text is null or sr.sales_function=$3)
         and sr.route_type=$4
         and lower(sr.route_value)=lower($5)
-      order by sr.priority, u.display_name
+      order by case when $6::boolean and sr.sales_function='vendedor_externo' then 0 else 1 end,
+        sr.priority, u.display_name
       limit 1
-    `, [ctx.org.id, channel, salesFunction, routeType, routeValue]);
+    `, [ctx.org.id, channel, wantedSalesFunction, routeType, wantedRouteValue, anyFunction]);
+    let row = await tryRoute(salesFunction, routeValue);
+    if (!row && salesFunction !== "vendedor_externo") row = await tryRoute("vendedor_externo", routeValue);
+    if (!row && channel === "varejo") row = await tryRoute(salesFunction, "CAMBUI");
+    if (!row && channel === "varejo") row = await tryRoute("vendedor_externo", "CAMBUI");
+    if (!row && channel === "varejo") row = await tryRoute(null, "CAMBUI", true);
     if (!row) return null;
-    return { ...row, channel, salesFunction, routeType, routeValue };
+    return { ...row, channel, salesFunction: row.sales_function || salesFunction, routeType: row.route_type || routeType, routeValue: row.route_value || routeValue };
   }
   async function ensureManualDestination(ctx, input) {
     const requested = normalizePhone(input.responsiblePhone || "");
@@ -750,21 +859,92 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
     await ensureBinding(ctx.org.id, user.id, account.id);
     return { user, account, department, phone: account.e164, name: displayName, departmentName, reason: "Destino manual informado no painel MVP" };
   }
-  async function ensureContact(orgId, phone, name) {
-    const found = await one(
-      "select c.id from contacts c join contact_identifiers i on i.contact_id=c.id where c.organization_id=$1 and i.e164=$2 order by c.created_at limit 1",
-      [orgId, phone.e164]
-    );
-    if (found) {
-      if (name) await pool.query("update contacts set display_name=coalesce(display_name,$2) where id=$1", [found.id, name]);
-      return found;
+  async function findCustomerForCase(orgId, body, phone, name) {
+    const customerCode = String(body.customerCode || body.customer_code || "").trim().toUpperCase();
+    const email = normalizeEmail(body.email || body.contact?.email || "");
+    const phoneDigits = phoneDigitsForLookup(phone.e164);
+    const exactName = String(name || body.name || body.contact?.name || "").trim();
+    const byCode = customerCode ? await one(`
+      select id, display_name, customer_code, customer_profile, 'customer_code' as match_source
+      from contacts where organization_id=$1 and customer_code=$2 limit 1
+    `, [orgId, customerCode]) : null;
+    if (byCode) return byCode;
+    const byPhone = phoneDigits ? await one(`
+      select c.id, c.display_name, c.customer_code, c.customer_profile, 'phone' as match_source
+      from contacts c
+      join contact_identifiers i on i.organization_id=c.organization_id and i.contact_id=c.id and i.kind='phone'
+      where c.organization_id=$1
+        and right(regexp_replace(i.e164,'\\D','','g'), $2)=right($3, $2)
+      order by i.reliable desc, c.updated_at desc nulls last, c.created_at desc
+      limit 1
+    `, [orgId, phoneDigits.length, phoneDigits]) : null;
+    if (byPhone) return byPhone;
+    const byEmail = email ? await one(`
+      select id, display_name, customer_code, customer_profile, 'email' as match_source
+      from contacts
+      where organization_id=$1 and lower(coalesce(customer_profile->>'email',''))=$2
+      order by updated_at desc nulls last, created_at desc
+      limit 1
+    `, [orgId, email]) : null;
+    if (byEmail) return byEmail;
+    const byName = exactName ? await one(`
+      select id, display_name, customer_code, customer_profile, 'name' as match_source
+      from contacts
+      where organization_id=$1 and lower(display_name)=lower($2)
+      order by updated_at desc nulls last, created_at desc
+      limit 1
+    `, [orgId, exactName]) : null;
+    return byName || null;
+  }
+  async function ensureContactForCase(orgId, body, phone, name) {
+    const email = normalizeEmail(body.email || body.contact?.email || "");
+    let contact = await findCustomerForCase(orgId, body, phone, name);
+    const provisional = !contact;
+    if (!contact) {
+      contact = await one("insert into contacts(organization_id,display_name,customer_profile) values($1,$2,$3) returning id, display_name, customer_code, customer_profile, 'provisional' as match_source", [
+        orgId,
+        name || null,
+        JSON.stringify(email ? { email, provisional: true } : { provisional: true })
+      ]);
+    } else {
+      await pool.query(`
+        update contacts
+        set display_name=coalesce(nullif(display_name,''), $2),
+            customer_profile=case when $3::text is null then customer_profile else customer_profile || jsonb_build_object('email',$3::text) end,
+            updated_at=now()
+        where id=$1
+      `, [contact.id, name || null, email || null]);
     }
-    const contact = await one("insert into contacts(organization_id,display_name) values($1,$2) returning id", [orgId, name || null]);
-    await pool.query(
-      "insert into contact_identifiers(organization_id,contact_id,kind,e164,original,source,reliable) values($1,$2,'phone',$3,$4,'mvp_panel',true)",
-      [orgId, contact.id, phone.e164, phone.original]
+    await pool.query(`
+      insert into contact_identifiers(organization_id,contact_id,kind,e164,original,source,reliable)
+      values($1,$2,'phone',$3,$4,'mvp_panel',true)
+      on conflict (organization_id,contact_id,e164) do update
+        set original=excluded.original, source='mvp_panel', reliable=true
+    `, [orgId, contact.id, phone.e164, phone.original]);
+    const sourceKeys = await many(
+      "select source_system, source_key from customer_source_keys where organization_id=$1 and contact_id=$2 order by source_system, source_key limit 10",
+      [orgId, contact.id]
     );
-    return contact;
+    return {
+      ...contact,
+      provisional,
+      email,
+      source_keys: sourceKeys,
+      note: customerCodeNote({ ...contact, provisional, email, source_keys: sourceKeys })
+    };
+  }
+  function customerCodeNote(contact) {
+    const profile = contact.customer_profile || {};
+    const codes = [
+      `Codigo CRM: ${contact.customer_code}`,
+      profile.sourceCustomerCode ? `Codigo origem: ${profile.sourceCustomerCode}` : "",
+      ...(contact.source_keys || []).map((item) => `${item.source_system}: ${item.source_key}`)
+    ].filter(Boolean);
+    return [
+      contact.provisional ? "Cliente nao localizado na base: codigo provisório criado para saneamento pelo operador." : `Cliente localizado por ${contact.match_source || "cadastro"}.`,
+      ...codes,
+      contact.email ? `Email: ${contact.email}` : ""
+    ].filter(Boolean).join("\n");
   }
   async function findSegment(orgId, label) {
     if (!label) return null;
@@ -1063,23 +1243,7 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       const pipeline = await defaultPipeline(ctx.org.id, body.pipeline);
       const stage = await defaultStage(pipeline?.id, body.stage);
       const source = body.source ? await one("select id,name from acquisition_sources where organization_id=$1 and lower(name)=lower($2) limit 1", [ctx.org.id, body.source]) : null;
-      let contact;
-      const customerCode = String(body.customerCode || "").trim().toUpperCase();
-      if (customerCode) {
-        contact = await one(
-          "select id, display_name from contacts where organization_id=$1 and customer_code=$2 limit 1",
-          [ctx.org.id, customerCode]
-        );
-        if (!contact) return { error: "customer_not_found" };
-        await pool.query(`
-          insert into contact_identifiers(organization_id,contact_id,kind,e164,original,source,reliable)
-          values($1,$2,'phone',$3,$4,'mvp_panel',true)
-          on conflict (organization_id,contact_id,e164) do update
-            set original=excluded.original, source='mvp_panel', reliable=true
-        `, [ctx.org.id, contact.id, phone.e164, phone.original]);
-      } else {
-        contact = await ensureContact(ctx.org.id, phone, contactName);
-      }
+      const contact = await ensureContactForCase(ctx.org.id, body, phone, contactName);
       const publicProtocol = protocol();
       const client = await pool.connect();
       try {
@@ -1123,6 +1287,10 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
             [ctx.org.id, caseId, routed.user.id, String(body.nextTask).slice(0, 200)]
           );
         }
+        await client.query(
+          "insert into notes(organization_id,case_id,body) values($1,$2,$3)",
+          [ctx.org.id, caseId, contact.note]
+        );
         await client.query("commit");
         const fullCase = shapeCase(await one(`${caseSelect} where c.id=$1 order by h.created_at desc limit 1`, [caseId]));
         const fullHandoff = shapeHandoff((await many(`
@@ -1223,6 +1391,8 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       const alternateSourceCodeTerm = sourceCodeTerm.replace(/^C(?=\d)/, "");
       const sourceCodePrefix = `${sourceCodeTerm}%`;
       const alternateSourceCodePrefix = `${alternateSourceCodeTerm}%`;
+      const emailTerm = normalizeEmail(term);
+      const phoneTerm = phoneDigitsForLookup(term);
       const rows = await many(`
         select co.id, co.customer_code, co.display_name as name, co.customer_profile as profile,
           ci.e164 as phone, ci.original as original_phone,
@@ -1247,6 +1417,8 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
         where co.organization_id=$1
           and (position(lower($2) in lower(coalesce(co.display_name,''))) > 0
             or co.customer_code ilike $3
+            or ($9::text is not null and lower(coalesce(co.customer_profile->>'email','')) like ($9 || '%'))
+            or ($10::text is not null and right(regexp_replace(coalesce(ci.e164,''),'\\D','','g'), length($10))=$10)
             or coalesce(co.customer_profile->>'sourceCustomerCode','') ilike $5
             or coalesce(co.customer_profile->>'sourceCustomerCode','') ilike $7
             or exists (
@@ -1260,6 +1432,8 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
         group by co.id, co.customer_code, co.display_name, co.customer_profile, ci.e164, ci.original,
           ps.item_count, ps.order_count, ps.total_sales, ps.last_purchase_at
         order by case when lower(co.customer_code)=$4 then 0 else 1 end,
+          case when $10::text is not null and right(regexp_replace(coalesce(ci.e164,''),'\\D','','g'), length($10))=$10 then 0 else 1 end,
+          case when $9::text is not null and lower(coalesce(co.customer_profile->>'email',''))=$9 then 0 else 1 end,
           case when lower(coalesce(co.customer_profile->>'sourceCustomerCode',''))=lower($6)
             or lower(coalesce(co.customer_profile->>'sourceCustomerCode',''))=lower($8)
             or exists (
@@ -1273,7 +1447,18 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
           case when count(distinct c.id)>0 then 0 else 1 end,
           max(c.updated_at) desc nulls last, co.display_name
         limit 25
-      `, [ctx.org.id, term, `${codePrefix.replace(/[%_\\\\]/g, "")}%`, term.toUpperCase(), sourceCodePrefix, sourceCodeTerm, alternateSourceCodePrefix, alternateSourceCodeTerm]);
+      `, [
+        ctx.org.id,
+        term,
+        `${codePrefix.replace(/[%_\\\\]/g, "")}%`,
+        term.toUpperCase(),
+        sourceCodePrefix,
+        sourceCodeTerm,
+        alternateSourceCodePrefix,
+        alternateSourceCodeTerm,
+        emailTerm || null,
+        phoneTerm || null
+      ]);
       return { items: rows, total: rows.length };
     },
     getCase: async (caseId) => {

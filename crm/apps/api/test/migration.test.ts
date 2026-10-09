@@ -11,6 +11,7 @@ beforeAll(async () => {
   db = new PGlite();
   await db.exec(sql("0001_core.sql"));
   await db.exec(sql("0005_customer_registry.sql"));
+  await db.exec(sql("0008_customer_lookup_indexes.sql"));
   org = (await q("insert into organizations(name) values('ABR teste') returning id"))[0].id;
   await db.exec(sql("seed_reference_demo.sql").replaceAll(":'org_id'", `'${org}'`));
 }, 60_000);

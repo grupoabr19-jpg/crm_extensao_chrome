@@ -62,6 +62,9 @@ try {
   await applyMigration("0007_ai_operator_profile", async () => {
     await client.query(readFileSync(resolve(migrationsDir, "0007_ai_operator_profile.sql"), "utf8"));
   });
+  await applyMigration("0008_customer_lookup_indexes", async () => {
+    await client.query(readFileSync(resolve(migrationsDir, "0008_customer_lookup_indexes.sql"), "utf8"));
+  });
   await client.query("commit");
   console.log("Migrations concluidas.");
 } catch (err) {

@@ -34,13 +34,14 @@ const output = (over: Record<string, unknown> = {}, fields: Record<string, unkno
 
 describe("AI triage backend guard", () => {
   it("accepts evidenced main fields and builds a routed case payload", () => {
-    const guard = guardTriageOutput(output(), messages);
+    const guard = guardTriageOutput(output({}, { email: field("ana@alfa.com.br") }), messages);
     expect(guard).toMatchObject({
       ok: true,
       humanNeeded: false,
       fields: {
         name: "Ana",
         company: "Construtora Alfa",
+        email: "ana@alfa.com.br",
         city: "Jundiai",
         uf: "SP",
         segment_id: "Construtoras"
@@ -49,6 +50,7 @@ describe("AI triage backend guard", () => {
     expect(buildCasePayload({ body: { phone: "+5511999990001", salesFunction: "construcao_civil" }, guard })).toMatchObject({
       name: "Ana",
       phone: "+5511999990001",
+      email: "ana@alfa.com.br",
       company: "Construtora Alfa",
       city: "Jundiai",
       uf: "SP",

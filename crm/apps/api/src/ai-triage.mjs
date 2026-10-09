@@ -39,7 +39,7 @@ const APPROVED_QUESTIONS = {
 };
 
 const NULL_FIELD = { value: null, evidence_message_ids: [] };
-const TRIAGE_FIELDS = ["name", "company", "city", "uf", "segment_id", "need", "products", "quantity_text"];
+const TRIAGE_FIELDS = ["name", "company", "email", "city", "uf", "segment_id", "need", "products", "quantity_text"];
 
 export function normalizeText(value) {
   return String(value || "")
@@ -181,6 +181,7 @@ export function buildCasePayload({ body, guard }) {
   return {
     name: body.contact?.name || f.name || body.name || "",
     phone: body.contact?.phone || body.phone || "",
+    email: f.email || body.contact?.email || body.email || "",
     company: f.company || body.company || "",
     city: f.city || body.city || "",
     uf: f.uf || body.uf || "",
