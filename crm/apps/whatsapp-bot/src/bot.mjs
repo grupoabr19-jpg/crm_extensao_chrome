@@ -476,7 +476,9 @@ function markCooldown(snapshot) {
 function incomingFingerprint(snapshot) {
   return snapshot.messages
     .filter((message) => message.direction === "in")
-    .map((message) => `${message.id}:${message.text}`)
+    .slice(-8)
+    .map((message) => normalizeTextLocal(message.text))
+    .filter(Boolean)
     .join("|");
 }
 
