@@ -20,7 +20,7 @@ const config = {
   commitReady: envBool("WHATSAPP_BOT_COMMIT_READY", false),
   activeChatOnly: envBool("WHATSAPP_BOT_ACTIVE_CHAT_ONLY", true),
   pietraName: process.env.WHATSAPP_BOT_PIETRA_NAME || "Pietra",
-  pietraPhone: process.env.WHATSAPP_BOT_PIETRA_PHONE || "+5535998087702",
+  pietraPhone: process.env.WHATSAPP_BOT_PIETRA_PHONE || "+5535998138542",
   trainingFile: process.env.WHATSAPP_BOT_TRAINING_FILE || resolve(__dirname, "../training/abr-bot-training.json"),
   profileDir: process.env.WHATSAPP_BOT_PROFILE_DIR || resolve(crmRoot, ".local/whatsapp-bot-profile"),
   stateFile: process.env.WHATSAPP_BOT_STATE_FILE || resolve(crmRoot, ".local/whatsapp-bot-state.json"),
