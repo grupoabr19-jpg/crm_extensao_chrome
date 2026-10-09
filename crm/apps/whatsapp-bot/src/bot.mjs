@@ -100,7 +100,9 @@ async function tick(page) {
   const chats = await findUnreadChats(page);
   if (!chats.length) return;
   log(`Chats nao lidos encontrados: ${chats.length}; candidatos=${chats.slice(0, 5).map((chat) => `${chat.index}:${chat.title || "sem titulo"}`).join(" | ")}`);
-  for (const chat of chats.slice(0, config.maxChatsPerTick)) {
+  let handled = 0;
+  for (const chat of chats) {
+    if (handled >= config.maxChatsPerTick) break;
     const opened = await openChatByIndex(page, chat.index);
     if (!opened) {
       log(`Nao consegui abrir chat index=${chat.index}.`);
@@ -117,23 +119,24 @@ async function tick(page) {
     const fingerprint = incomingFingerprint(snapshot);
     if (seen.get(key) === fingerprint) continue;
     seen.set(key, fingerprint);
-    await handleConversation(page, snapshot);
+    const didHandle = await handleConversation(page, snapshot);
+    if (didHandle) handled += 1;
   }
 }
 
 async function handleConversation(page, snapshot) {
   const incoming = snapshot.messages.filter((message) => message.direction === "in");
-  if (!incoming.length) return;
+  if (!incoming.length) return false;
   const customerPhone = customerPhoneFromSnapshot(snapshot);
   if (!customerPhone) {
     log(`Ignorando sem telefone confiavel: ${snapshot.chatTitle || "sem titulo"} (${incoming.length} msg recebidas)`);
-    return;
+    return false;
   }
   log(`Triando: ${snapshot.chatTitle} (${customerPhone}; ${incoming.length} msg recebidas)`);
 
   if (hasTransferToPietraCommand(snapshot.messages)) {
     await transferToPietra(page, snapshot, customerPhone);
-    return;
+    return true;
   }
 
   const triage = await postJson("/v1/ai/triage", {
@@ -148,7 +151,7 @@ async function handleConversation(page, snapshot) {
   if (outbound?.text) {
     await maybeSend(page, outbound.text, "pergunta aprovada");
     markCooldown(snapshot);
-    return;
+    return true;
   }
 
   if (triage.triage?.action === "request_routing" && !triage.triage?.humanNeeded && config.commitReady) {
@@ -164,10 +167,11 @@ async function handleConversation(page, snapshot) {
       await maybeSend(page, message, "transferencia");
       markCooldown(snapshot);
     }
-    return;
+    return true;
   }
 
   log(`Sem envio: action=${triage.triage?.action || "n/a"} humanNeeded=${Boolean(triage.triage?.humanNeeded)} confidence=${triage.triage?.confidence ?? "n/a"}`);
+  return true;
 }
 
 async function transferToPietra(page, snapshot, customerPhone) {
