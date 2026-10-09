@@ -27,7 +27,8 @@ const config = {
   maxChatsPerTick: envInt("WHATSAPP_BOT_MAX_CHATS_PER_TICK", 3),
   respondExistingUnread: envBool("WHATSAPP_BOT_RESPOND_EXISTING_UNREAD", false),
   scanRecentForCommands: envBool("WHATSAPP_BOT_SCAN_RECENT_FOR_COMMANDS", true),
-  maxRecentCommandChats: envInt("WHATSAPP_BOT_MAX_RECENT_COMMAND_CHATS", 8)
+  maxRecentCommandChats: envInt("WHATSAPP_BOT_MAX_RECENT_COMMAND_CHATS", 8),
+  transferLockMs: envInt("WHATSAPP_BOT_TRANSFER_LOCK_MS", 12 * 60 * 60 * 1000)
 };
 
 const state = loadState(config.stateFile);
@@ -209,10 +210,11 @@ async function handleConversation(page, snapshot) {
 }
 
 async function transferToPietra(page, snapshot, customerPhone) {
-  if (isHandledTransfer(snapshot)) {
+  if (isHandledTransfer(snapshot, customerPhone)) {
     log(`Transferencia ja processada para este comando: ${snapshot.chatTitle}`);
     return;
   }
+  markHandledTransfer(snapshot, customerPhone);
   log(`Comando detectado: transferir para ${config.pietraName}. Criando ficha e handoff...`);
   let casePayload = {};
   try {
@@ -234,7 +236,6 @@ async function transferToPietra(page, snapshot, customerPhone) {
     await maybeSend(page, "Para eu transferir para a Pietra, preciso confirmar o telefone do cliente.", "telefone necessario");
     markCooldown(snapshot);
     markAwaitingCustomer(snapshot);
-    markHandledTransfer(snapshot);
     return;
   }
 
@@ -256,7 +257,6 @@ async function transferToPietra(page, snapshot, customerPhone) {
     await maybeSend(page, message, `transferencia para ${config.pietraName}`);
     markCooldown(snapshot);
     markAwaitingCustomer(snapshot);
-    markHandledTransfer(snapshot);
     log(`Ficha criada: ${created.case?.protocol || created.case?.id || "sem protocolo"}; destino=${config.pietraName}`);
   } else {
     log(`Ficha criada, mas sem mensagem de handoff retornada: ${created.case?.protocol || created.case?.id || "sem protocolo"}`);
@@ -282,11 +282,12 @@ async function scanRecentTransferCommands(page) {
   const chats = await findRecentChats(page);
   for (const chat of chats.slice(0, config.maxRecentCommandChats)) {
     const snapshot = await openAndReadChat(page, chat);
-    if (!snapshot || !hasTransferToPietraCommand(snapshot.messages) || isHandledTransfer(snapshot)) continue;
+    if (!snapshot || !hasTransferToPietraCommand(snapshot.messages)) continue;
     const customerPhone = customerPhoneFromSnapshot(snapshot);
+    if (isHandledTransfer(snapshot, customerPhone)) continue;
     if (!customerPhone) {
       log(`Comando para Pietra ignorado sem telefone confiavel: ${snapshot.chatTitle || "sem titulo"}`);
-      markHandledTransfer(snapshot);
+      markHandledTransfer(snapshot, customerPhone);
       continue;
     }
     await transferToPietra(page, snapshot, customerPhone);
@@ -615,16 +616,31 @@ function isAwaitingCustomer(key, snapshot, fingerprint) {
   return false;
 }
 
-function isHandledTransfer(snapshot) {
-  const fingerprint = transferCommandFingerprint(snapshot);
-  return Boolean(fingerprint) && handledTransfers.get(chatKey(snapshot)) === fingerprint;
+function isHandledTransfer(snapshot, customerPhone = "") {
+  const keys = transferDedupKeys(snapshot, customerPhone);
+  const now = Date.now();
+  return keys.some((key) => {
+    const handledAt = Number(handledTransfers.get(key) || 0);
+    return handledAt > 0 && now - handledAt < config.transferLockMs;
+  });
 }
 
-function markHandledTransfer(snapshot) {
-  const fingerprint = transferCommandFingerprint(snapshot);
-  if (!fingerprint) return;
-  handledTransfers.set(chatKey(snapshot), fingerprint);
+function markHandledTransfer(snapshot, customerPhone = "") {
+  for (const key of transferDedupKeys(snapshot, customerPhone)) {
+    handledTransfers.set(key, Date.now());
+  }
   persistState();
+}
+
+function transferDedupKeys(snapshot, customerPhone = "") {
+  const fingerprint = transferCommandFingerprint(snapshot);
+  if (!fingerprint) return [];
+  const keys = [`chat:${chatKey(snapshot)}:${fingerprint}`];
+  if (customerPhone) {
+    keys.push(`phone:${customerPhone}`);
+    keys.push(`phone-command:${customerPhone}:${fingerprint}`);
+  }
+  return keys;
 }
 
 function transferCommandFingerprint(snapshot) {
