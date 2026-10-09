@@ -19,6 +19,7 @@ WHATSAPP_BOT_HEADLESS=false
 WHATSAPP_BOT_CRM_EMAIL=thiago.almeida@grupoabr.com.br
 WHATSAPP_BOT_CRM_PASSWORD=sua_senha_do_crm
 WHATSAPP_BOT_COMMIT_READY=false
+WHATSAPP_BOT_NAME=Abraão
 WHATSAPP_BOT_PIETRA_PHONE=+5535998138542
 ```
 
@@ -39,6 +40,8 @@ O roteiro/base de treinamento consumido pelo bot fica em:
 crm/apps/whatsapp-bot/training/abr-bot-training.json
 ```
 
-Esse arquivo define persona, regras comerciais, catalogo basico, perguntas permitidas e comandos de transferencia. O bot usa essa base para qualificar leads, localizar cadastro, abrir ficha no CRM e transferir para o responsavel. Ele pode confirmar categorias basicas de produtos do Grupo ABR, mas nao deve informar especificacoes tecnicas, preco, prazo, estoque, garantia, disponibilidade ou detalhes sobre Vergraf/grafeno.
+Esse arquivo define persona, regras comerciais, catalogo basico, perguntas permitidas e comandos de transferencia. O bot se chama Abraão e usa essa base para qualificar leads, localizar cadastro, abrir ficha no CRM e transferir para o responsavel. Ele pode confirmar categorias basicas de produtos do Grupo ABR, mas nao deve informar especificacoes tecnicas, preco, prazo, estoque, garantia, disponibilidade ou detalhes sobre Vergraf/grafeno.
+
+Antes da transferencia, o Abraão encerra o contato com o cliente usando a frase `#ParceirAÇO obrigado pelo contato, em breve o vendedor X irá atendê-lo.`, trocando `X` pelo vendedor definido pelo roteamento.
 
 O bot do WhatsApp roda localmente em Chromium/Playwright e usa o `crm/.env` local. As variaveis `WHATSAPP_BOT_*` nao precisam estar no Render, a menos que o bot seja executado la tambem. No Render ficam apenas os secrets do backend, como banco de dados, autenticacao e chave da IA.

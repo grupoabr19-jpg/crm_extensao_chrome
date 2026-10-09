@@ -19,6 +19,7 @@ const config = {
   pollMs: envInt("WHATSAPP_BOT_POLL_MS", 5000),
   commitReady: envBool("WHATSAPP_BOT_COMMIT_READY", false),
   activeChatOnly: envBool("WHATSAPP_BOT_ACTIVE_CHAT_ONLY", true),
+  botName: process.env.WHATSAPP_BOT_NAME || "Abraão",
   pietraName: process.env.WHATSAPP_BOT_PIETRA_NAME || "Pietra",
   pietraPhone: process.env.WHATSAPP_BOT_PIETRA_PHONE || "+5535998138542",
   trainingFile: process.env.WHATSAPP_BOT_TRAINING_FILE || resolve(__dirname, "../training/abr-bot-training.json"),
@@ -52,7 +53,7 @@ async function main() {
 
   mkdirSync(config.profileDir, { recursive: true });
   authToken = await loginCrm();
-  log(`CRM autenticado como ${config.email}. Modo: ${config.mode}. API: ${config.apiBase}`);
+  log(`${config.botName} autenticado no CRM como ${config.email}. Modo: ${config.mode}. API: ${config.apiBase}`);
 
   const context = await chromium.launchPersistentContext(config.profileDir, {
     headless: config.headless,
@@ -200,6 +201,8 @@ async function handleConversation(page, snapshot) {
     const message = handoff.message || committed.outbox?.payload?.message || "";
     const destinationPhone = handoff.destination_phone || committed.outbox?.payload?.destination_phone || "";
     if (message && destinationPhone) {
+      const closingSent = await maybeSend(page, customerTransferClosing(handoff.destination_name || "vendedor responsavel"), "encerramento antes da transferencia");
+      if (!closingSent && config.mode !== "dry-run") return true;
       await sendToPhone(page, destinationPhone, message, "handoff para vendedor");
       markCooldown(snapshot);
       markAwaitingCustomer(snapshot);
@@ -260,6 +263,8 @@ async function transferToPietra(page, snapshot, customerPhone) {
   const message = handoff.message || created.outbox?.payload?.message || "";
   const destinationPhone = handoff.destination_phone || created.outbox?.payload?.destination_phone || "";
   if (message && destinationPhone) {
+    const closingSent = await maybeSend(page, customerTransferClosing(handoff.destination_name || config.pietraName), "encerramento antes da transferencia");
+    if (!closingSent && config.mode !== "dry-run") return;
     await sendToPhone(page, destinationPhone, message, `handoff para ${config.pietraName}`);
     markCooldown(snapshot);
     markAwaitingCustomer(snapshot);
@@ -306,15 +311,16 @@ async function scanRecentTransferCommands(page) {
 async function maybeSend(page, text, reason) {
   if (config.mode === "dry-run") {
     log(`[dry-run] ${reason}: ${text}`);
-    return;
+    return true;
   }
   await fillComposer(page, text);
   if (config.mode === "auto") {
     await page.keyboard.press("Enter");
     log(`Mensagem enviada (${reason}).`);
-    return;
+    return true;
   }
   log(`[supervised] Texto preparado no compositor (${reason}). Revise e envie manualmente.`);
+  return false;
 }
 
 async function sendToPhone(page, phone, text, reason) {
@@ -622,6 +628,11 @@ function isCoolingDown(key, snapshot) {
 
 function markCooldown(snapshot) {
   cooldowns.set(chatKey(snapshot), Date.now() + envInt("WHATSAPP_BOT_CHAT_COOLDOWN_MS", 120000));
+}
+
+function customerTransferClosing(sellerName) {
+  const responsible = String(sellerName || "vendedor responsavel").trim() || "vendedor responsavel";
+  return `#ParceirAÇO obrigado pelo contato, em breve o vendedor ${responsible} irá atendê-lo.`;
 }
 
 function markAwaitingCustomer(snapshot) {
