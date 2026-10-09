@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
@@ -23,15 +23,22 @@ const config = {
   pietraPhone: process.env.WHATSAPP_BOT_PIETRA_PHONE || "+5535998087702",
   trainingFile: process.env.WHATSAPP_BOT_TRAINING_FILE || resolve(__dirname, "../training/abr-bot-training.json"),
   profileDir: process.env.WHATSAPP_BOT_PROFILE_DIR || resolve(crmRoot, ".local/whatsapp-bot-profile"),
-  maxChatsPerTick: envInt("WHATSAPP_BOT_MAX_CHATS_PER_TICK", 3)
+  stateFile: process.env.WHATSAPP_BOT_STATE_FILE || resolve(crmRoot, ".local/whatsapp-bot-state.json"),
+  maxChatsPerTick: envInt("WHATSAPP_BOT_MAX_CHATS_PER_TICK", 3),
+  respondExistingUnread: envBool("WHATSAPP_BOT_RESPOND_EXISTING_UNREAD", false),
+  scanRecentForCommands: envBool("WHATSAPP_BOT_SCAN_RECENT_FOR_COMMANDS", true),
+  maxRecentCommandChats: envInt("WHATSAPP_BOT_MAX_RECENT_COMMAND_CHATS", 8)
 };
 
-const seen = new Map();
+const state = loadState(config.stateFile);
+const seen = new Map(Object.entries(state.seen || {}));
 const cooldowns = new Map();
-const awaitingCustomer = new Map();
+const awaitingCustomer = new Map(Object.entries(state.awaitingCustomer || {}));
+const handledTransfers = new Map(Object.entries(state.handledTransfers || {}));
 const training = loadTraining(config.trainingFile);
 let authToken = "";
 let emptyActiveChatNotified = false;
+let bootstrappedUnread = false;
 
 async function main() {
   if (!config.enabled) {
@@ -100,31 +107,53 @@ async function tick(page) {
   }
 
   const chats = await findUnreadChats(page);
-  if (!chats.length) return;
-  log(`Chats nao lidos encontrados: ${chats.length}; candidatos=${chats.slice(0, 5).map((chat) => `${chat.index}:${chat.title || "sem titulo"}`).join(" | ")}`);
-  let handled = 0;
-  for (const chat of chats) {
-    if (handled >= config.maxChatsPerTick) break;
-    const opened = await openChatByIndex(page, chat.index);
-    if (!opened) {
-      log(`Nao consegui abrir chat index=${chat.index}.`);
-      continue;
+  if (chats.length) {
+    log(`Chats nao lidos encontrados: ${chats.length}; candidatos=${chats.slice(0, 5).map((chat) => `${chat.index}:${chat.title || "sem titulo"}`).join(" | ")}`);
+    if (!bootstrappedUnread && !config.respondExistingUnread) {
+      await bootstrapUnreadChats(page, chats);
+      bootstrappedUnread = true;
+      if (config.scanRecentForCommands) await scanRecentTransferCommands(page);
+      return;
     }
-    await page.waitForTimeout(600);
-    const snapshot = withChatCandidate(await readOpenChat(page), chat);
-    if (!snapshot.messages.length) {
-      log(`Chat aberto sem mensagens legiveis: ${snapshot.chatTitle || "sem titulo"}; candidates=${snapshot.candidateCount || 0}`);
-      continue;
+    let handled = 0;
+    for (const chat of chats) {
+      if (handled >= config.maxChatsPerTick) break;
+      const snapshot = await openAndReadChat(page, chat);
+      if (!snapshot) continue;
+      const key = chatKey(snapshot);
+      if (isCoolingDown(key, snapshot)) continue;
+      const fingerprint = incomingFingerprint(snapshot);
+      if (isAwaitingCustomer(key, snapshot, fingerprint)) continue;
+      if (seen.get(key) === fingerprint) continue;
+      seen.set(key, fingerprint);
+      persistState();
+      const didHandle = await handleConversation(page, snapshot);
+      if (didHandle) handled += 1;
     }
-    const key = chatKey(snapshot);
-    if (isCoolingDown(key, snapshot)) continue;
-    const fingerprint = incomingFingerprint(snapshot);
-    if (isAwaitingCustomer(key, snapshot, fingerprint)) continue;
-    if (seen.get(key) === fingerprint) continue;
-    seen.set(key, fingerprint);
-    const didHandle = await handleConversation(page, snapshot);
-    if (didHandle) handled += 1;
   }
+  bootstrappedUnread = true;
+
+  if (config.scanRecentForCommands) {
+    await scanRecentTransferCommands(page);
+  }
+}
+
+async function bootstrapUnreadChats(page, chats) {
+  log("Primeiro ciclo: registrando conversas antigas sem responder automaticamente.");
+  for (const chat of chats.slice(0, Math.max(config.maxRecentCommandChats, config.maxChatsPerTick))) {
+    const snapshot = await openAndReadChat(page, chat);
+    if (!snapshot) continue;
+    const key = chatKey(snapshot);
+    const fingerprint = incomingFingerprint(snapshot);
+    seen.set(key, fingerprint);
+    if (hasTransferToPietraCommand(snapshot.messages) && !isHandledTransfer(snapshot)) {
+      const customerPhone = customerPhoneFromSnapshot(snapshot);
+      if (customerPhone) await transferToPietra(page, snapshot, customerPhone);
+      continue;
+    }
+    markAwaitingCustomer(snapshot);
+  }
+  persistState();
 }
 
 async function handleConversation(page, snapshot) {
@@ -180,6 +209,10 @@ async function handleConversation(page, snapshot) {
 }
 
 async function transferToPietra(page, snapshot, customerPhone) {
+  if (isHandledTransfer(snapshot)) {
+    log(`Transferencia ja processada para este comando: ${snapshot.chatTitle}`);
+    return;
+  }
   log(`Comando detectado: transferir para ${config.pietraName}. Criando ficha e handoff...`);
   let casePayload = {};
   try {
@@ -201,6 +234,7 @@ async function transferToPietra(page, snapshot, customerPhone) {
     await maybeSend(page, "Para eu transferir para a Pietra, preciso confirmar o telefone do cliente.", "telefone necessario");
     markCooldown(snapshot);
     markAwaitingCustomer(snapshot);
+    markHandledTransfer(snapshot);
     return;
   }
 
@@ -222,9 +256,41 @@ async function transferToPietra(page, snapshot, customerPhone) {
     await maybeSend(page, message, `transferencia para ${config.pietraName}`);
     markCooldown(snapshot);
     markAwaitingCustomer(snapshot);
+    markHandledTransfer(snapshot);
     log(`Ficha criada: ${created.case?.protocol || created.case?.id || "sem protocolo"}; destino=${config.pietraName}`);
   } else {
     log(`Ficha criada, mas sem mensagem de handoff retornada: ${created.case?.protocol || created.case?.id || "sem protocolo"}`);
+  }
+}
+
+async function openAndReadChat(page, chat) {
+  const opened = await openChatByIndex(page, chat.index);
+  if (!opened) {
+    log(`Nao consegui abrir chat index=${chat.index}.`);
+    return null;
+  }
+  await page.waitForTimeout(600);
+  const snapshot = withChatCandidate(await readOpenChat(page), chat);
+  if (!snapshot.messages.length) {
+    log(`Chat aberto sem mensagens legiveis: ${snapshot.chatTitle || "sem titulo"}; candidates=${snapshot.candidateCount || 0}`);
+    return null;
+  }
+  return snapshot;
+}
+
+async function scanRecentTransferCommands(page) {
+  const chats = await findRecentChats(page);
+  for (const chat of chats.slice(0, config.maxRecentCommandChats)) {
+    const snapshot = await openAndReadChat(page, chat);
+    if (!snapshot || !hasTransferToPietraCommand(snapshot.messages) || isHandledTransfer(snapshot)) continue;
+    const customerPhone = customerPhoneFromSnapshot(snapshot);
+    if (!customerPhone) {
+      log(`Comando para Pietra ignorado sem telefone confiavel: ${snapshot.chatTitle || "sem titulo"}`);
+      markHandledTransfer(snapshot);
+      continue;
+    }
+    await transferToPietra(page, snapshot, customerPhone);
+    break;
   }
 }
 
@@ -279,6 +345,36 @@ async function findUnreadChats(page) {
           const title = row.querySelector("span[title]")?.getAttribute("title") || "";
           const hasTime = /(\d{1,2}:\d{2}|Ontem|Yesterday|Hoje|Today)/i.test(text);
           const isNav = /^(conversas|chats|status|atualizacoes|atualizações|canais|channels|comunidades|communities|arquivadas)$/i.test(title.trim());
+          return title && !isNav && hasTime && text.trim() && rect.height > 42 && rect.width > 180;
+        });
+        if (rows.length) return rows;
+      }
+      return [];
+    }
+  });
+}
+
+async function findRecentChats(page) {
+  return page.evaluate(() => {
+    return chatRows().map((row, index) => {
+      const text = row.textContent || "";
+      const title = row.querySelector("span[title]")?.getAttribute("title") || "";
+      return { index, title, text: text.slice(0, 180), unread: false };
+    });
+
+    function chatRows() {
+      const selectors = [
+        "#pane-side [role='row']",
+        "#pane-side [role='listitem']",
+        "#pane-side div[tabindex='0']"
+      ];
+      for (const selector of selectors) {
+        const rows = Array.from(document.querySelectorAll(selector)).filter((candidate) => {
+          const rect = candidate.getBoundingClientRect();
+          const text = candidate.textContent || "";
+          const title = candidate.querySelector("span[title]")?.getAttribute("title") || "";
+          const hasTime = /(\d{1,2}:\d{2}|Ontem|Yesterday|Hoje|Today)/i.test(text);
+          const isNav = /^(conversas|chats|status|atualizacoes|atualizaÃ§Ãµes|canais|channels|comunidades|communities|arquivadas)$/i.test(title.trim());
           return title && !isNav && hasTime && text.trim() && rect.height > 42 && rect.width > 180;
         });
         if (rows.length) return rows;
@@ -424,6 +520,27 @@ function loadTraining(path) {
   }
 }
 
+function loadState(path) {
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function persistState() {
+  try {
+    mkdirSync(dirname(config.stateFile), { recursive: true });
+    writeFileSync(config.stateFile, JSON.stringify({
+      seen: Object.fromEntries(seen),
+      awaitingCustomer: Object.fromEntries(awaitingCustomer),
+      handledTransfers: Object.fromEntries(handledTransfers)
+    }, null, 2));
+  } catch (error) {
+    log(`Estado nao salvo: ${error.message}`);
+  }
+}
+
 function envBool(key, fallback) {
   const value = String(process.env[key] || "").trim().toLowerCase();
   if (["1", "true", "yes", "sim", "on"].includes(value)) return true;
@@ -485,6 +602,7 @@ function markAwaitingCustomer(snapshot) {
     incomingCount: incomingCount(snapshot),
     fingerprint: incomingFingerprint(snapshot)
   });
+  persistState();
 }
 
 function isAwaitingCustomer(key, snapshot, fingerprint) {
@@ -493,7 +611,29 @@ function isAwaitingCustomer(key, snapshot, fingerprint) {
   if (incomingCount(snapshot) <= pending.incomingCount) return true;
   if (fingerprint === pending.fingerprint) return true;
   awaitingCustomer.delete(key);
+  persistState();
   return false;
+}
+
+function isHandledTransfer(snapshot) {
+  const fingerprint = transferCommandFingerprint(snapshot);
+  return Boolean(fingerprint) && handledTransfers.get(chatKey(snapshot)) === fingerprint;
+}
+
+function markHandledTransfer(snapshot) {
+  const fingerprint = transferCommandFingerprint(snapshot);
+  if (!fingerprint) return;
+  handledTransfers.set(chatKey(snapshot), fingerprint);
+  persistState();
+}
+
+function transferCommandFingerprint(snapshot) {
+  return snapshot.messages
+    .filter((message) => message.direction === "in")
+    .slice(-8)
+    .map((message) => normalizeTextLocal(message.text))
+    .filter((text) => /TRANSFERIR|TRANSFERE|PASSA|PASSAR|ENCAMINH/.test(text) && /PIETRA/.test(text))
+    .join("|");
 }
 
 function incomingCount(snapshot) {
