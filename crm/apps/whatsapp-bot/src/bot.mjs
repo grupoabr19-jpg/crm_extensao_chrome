@@ -28,6 +28,7 @@ const config = {
 
 const seen = new Map();
 const cooldowns = new Map();
+const awaitingCustomer = new Map();
 const training = loadTraining(config.trainingFile);
 let authToken = "";
 let emptyActiveChatNotified = false;
@@ -91,6 +92,7 @@ async function tick(page) {
     const key = chatKey(snapshot);
     if (isCoolingDown(key, snapshot)) return;
     const fingerprint = incomingFingerprint(snapshot);
+    if (isAwaitingCustomer(key, snapshot, fingerprint)) return;
     if (seen.get(key) === fingerprint) return;
     seen.set(key, fingerprint);
     await handleConversation(page, snapshot);
@@ -117,6 +119,7 @@ async function tick(page) {
     const key = chatKey(snapshot);
     if (isCoolingDown(key, snapshot)) continue;
     const fingerprint = incomingFingerprint(snapshot);
+    if (isAwaitingCustomer(key, snapshot, fingerprint)) continue;
     if (seen.get(key) === fingerprint) continue;
     seen.set(key, fingerprint);
     const didHandle = await handleConversation(page, snapshot);
@@ -151,6 +154,7 @@ async function handleConversation(page, snapshot) {
   if (outbound?.text) {
     await maybeSend(page, outbound.text, "pergunta aprovada");
     markCooldown(snapshot);
+    markAwaitingCustomer(snapshot);
     return true;
   }
 
@@ -166,6 +170,7 @@ async function handleConversation(page, snapshot) {
     if (message) {
       await maybeSend(page, message, "transferencia");
       markCooldown(snapshot);
+      markAwaitingCustomer(snapshot);
     }
     return true;
   }
@@ -195,6 +200,7 @@ async function transferToPietra(page, snapshot, customerPhone) {
   if (!phone) {
     await maybeSend(page, "Para eu transferir para a Pietra, preciso confirmar o telefone do cliente.", "telefone necessario");
     markCooldown(snapshot);
+    markAwaitingCustomer(snapshot);
     return;
   }
 
@@ -215,6 +221,7 @@ async function transferToPietra(page, snapshot, customerPhone) {
   if (message) {
     await maybeSend(page, message, `transferencia para ${config.pietraName}`);
     markCooldown(snapshot);
+    markAwaitingCustomer(snapshot);
     log(`Ficha criada: ${created.case?.protocol || created.case?.id || "sem protocolo"}; destino=${config.pietraName}`);
   } else {
     log(`Ficha criada, mas sem mensagem de handoff retornada: ${created.case?.protocol || created.case?.id || "sem protocolo"}`);
@@ -471,6 +478,26 @@ function isCoolingDown(key, snapshot) {
 
 function markCooldown(snapshot) {
   cooldowns.set(chatKey(snapshot), Date.now() + envInt("WHATSAPP_BOT_CHAT_COOLDOWN_MS", 120000));
+}
+
+function markAwaitingCustomer(snapshot) {
+  awaitingCustomer.set(chatKey(snapshot), {
+    incomingCount: incomingCount(snapshot),
+    fingerprint: incomingFingerprint(snapshot)
+  });
+}
+
+function isAwaitingCustomer(key, snapshot, fingerprint) {
+  const pending = awaitingCustomer.get(key);
+  if (!pending) return false;
+  if (incomingCount(snapshot) <= pending.incomingCount) return true;
+  if (fingerprint === pending.fingerprint) return true;
+  awaitingCustomer.delete(key);
+  return false;
+}
+
+function incomingCount(snapshot) {
+  return snapshot.messages.filter((message) => message.direction === "in").length;
 }
 
 function incomingFingerprint(snapshot) {
