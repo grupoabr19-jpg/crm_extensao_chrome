@@ -30,14 +30,27 @@ function protocol() {
   return `ABR-${s.slice(0, 4)}-${s.slice(4)}`;
 }
 
-function handoffLink(targetE164, publicProtocol) {
-  const text = `Ola! Meu protocolo de atendimento ABR e ${publicProtocol}`;
-  return `https://wa.me/${targetE164.slice(1)}?text=${encodeURIComponent(text)}`;
+function handoffLink(targetE164, publicProtocol, text = "") {
+  if (!targetE164 || !String(targetE164).startsWith("+")) return "";
+  const message = text || `Ola! Sou do Grupo ABR. Recebi seu atendimento pelo protocolo ${publicProtocol}.`;
+  return `https://wa.me/${targetE164.slice(1)}?text=${encodeURIComponent(message)}`;
 }
 
-function externalHandoffMessage({ firstName, responsibleName, department, link, publicProtocol }) {
-  const thanks = firstName ? `Obrigado, ${firstName}.` : "Obrigado.";
-  return `${thanks} Registrei sua solicitacao. Para continuar, fale com ${responsibleName}, do ${department}: ${link}. Clique no link e envie a mensagem que aparecer. Protocolo: ${publicProtocol}.`;
+function externalHandoffMessage({ customerName, firstName, customerPhone, customerCode, company, city, uf, need, responsibleName, department, link, publicProtocol }) {
+  const name = customerName || firstName || "Cliente WhatsApp";
+  const cityUf = [city, uf].filter(Boolean).join("/");
+  return [
+    `Novo lead ABR para atendimento - ${department || "Vendas"}.`,
+    `Responsavel: ${responsibleName || "Vendedor ABR"}.`,
+    `Protocolo: ${publicProtocol}.`,
+    `Cliente: ${name}.`,
+    customerPhone ? `Telefone do cliente: ${customerPhone}.` : "",
+    customerCode ? `Codigo CRM: ${customerCode}.` : "",
+    company ? `Empresa: ${company}.` : "",
+    cityUf ? `Cidade/UF: ${cityUf}.` : "",
+    need ? `Necessidade: ${String(need).replace(/\s+/g, " ").slice(0, 600)}.` : "",
+    link ? `Link para chamar o cliente: ${link}` : "Telefone do cliente sem link automatico. Confira a ficha antes de chamar."
+  ].filter(Boolean).join("\n");
 }
 
 const storageDeps = { protocol, handoffLink, externalHandoffMessage };

@@ -416,7 +416,7 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
       if (!saleValue.ok) return { error: "invalid_sale_value" };
       const routed = routeLead(body);
       const publicProtocol = protocol();
-      const link = handoffLink(routed.user.phone, publicProtocol);
+      const link = handoffLink(phone.e164, publicProtocol);
       const createdAt = new Date().toISOString();
       const crmCase = {
         id: randomUUID(),
@@ -451,7 +451,14 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
         destination_department: routed.user.department,
         link,
         message: externalHandoffMessage({
+          customerName: crmCase.contact.name,
           firstName: crmCase.contact.name ? crmCase.contact.name.split(/\s+/)[0] : null,
+          customerPhone: crmCase.contact.phone,
+          customerCode: crmCase.contact.customer_code,
+          company: crmCase.fields.company,
+          city: crmCase.fields.city,
+          uf: crmCase.fields.uf,
+          need: crmCase.fields.need,
           responsibleName: routed.user.name,
           department: routed.user.department,
           link,
@@ -599,7 +606,7 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
       if (!found) return { error: "case_not_found" };
       const routed = routeLead(body);
       const publicProtocol = protocol();
-      const link = handoffLink(routed.user.phone, publicProtocol);
+      const link = handoffLink(found.contact.phone, publicProtocol);
       const handoff = {
         id: randomUUID(),
         case_id: caseId,
@@ -608,7 +615,20 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
         destination_name: routed.user.name,
         destination_department: routed.user.department,
         link,
-        message: externalHandoffMessage({ firstName: found.contact.name ? found.contact.name.split(/\s+/)[0] : null, responsibleName: routed.user.name, department: routed.user.department, link, publicProtocol }),
+        message: externalHandoffMessage({
+          customerName: found.contact.name,
+          firstName: found.contact.name ? found.contact.name.split(/\s+/)[0] : null,
+          customerPhone: found.contact.phone,
+          customerCode: found.contact.customer_code,
+          company: found.fields.company,
+          city: found.fields.city,
+          uf: found.fields.uf,
+          need: found.fields.need,
+          responsibleName: routed.user.name,
+          department: routed.user.department,
+          link,
+          publicProtocol
+        }),
         state: "created",
         created_at: new Date().toISOString(),
         events: [{ type: "created", at: new Date().toISOString(), reason: "Transferencia manual MVP" }]
@@ -1007,7 +1027,7 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
     };
   }
   function shapeHandoff(row) {
-    const link = handoffLink(row.destination_phone, row.protocol);
+    const link = handoffLink(row.contact_phone, row.protocol);
     return {
       id: row.id,
       case_id: row.case_id,
@@ -1017,7 +1037,14 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       destination_department: row.destination_department,
       link,
       message: externalHandoffMessage({
+        customerName: row.contact_name || null,
         firstName: row.contact_name ? String(row.contact_name).split(/\s+/)[0] : null,
+        customerPhone: row.contact_phone || null,
+        customerCode: row.customer_code || null,
+        company: row.company_name || null,
+        city: row.city || null,
+        uf: row.uf || null,
+        need: row.need || null,
         responsibleName: row.destination_name,
         department: row.destination_department,
         link,
@@ -1307,7 +1334,7 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
         const fullCase = shapeCase(await one(`${caseSelect} where c.id=$1 order by h.created_at desc limit 1`, [caseId]));
         const fullHandoff = shapeHandoff((await many(`
           select h.id, h.case_id, h.protocol, wa.e164 destination_phone, u.display_name destination_name, d.name destination_department,
-            co.display_name contact_name, h.created_at::text,
+            co.display_name contact_name, co.customer_code, ci.e164 contact_phone, c.company_name, c.city, c.uf, c.need, h.created_at::text,
             coalesce(json_agg(json_build_object('type', he.type, 'at', he.at::text, 'payload', he.payload) order by he.id) filter (where he.id is not null), '[]') events,
             case when bool_or(he.type='claimed') then 'claimed' else 'created' end state
           from handoffs h
@@ -1316,9 +1343,16 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
           join cases c on c.id=h.case_id
           left join departments d on d.id=c.department_id
           join contacts co on co.id=c.contact_id
+          left join lateral (
+            select e164
+            from contact_identifiers
+            where organization_id=co.organization_id and contact_id=co.id and kind='phone'
+            order by (source='mvp_panel') desc, reliable desc, id
+            limit 1
+          ) ci on true
           left join handoff_events he on he.handoff_id=h.id
           where h.id=$1
-          group by h.id, wa.e164, u.display_name, d.name, co.display_name
+          group by h.id, wa.e164, u.display_name, d.name, co.display_name, co.customer_code, ci.e164, c.company_name, c.city, c.uf, c.need
         `, [handoff.rows[0].id]))[0]);
         return { case: fullCase, handoff: fullHandoff };
       } catch (err) {
@@ -1832,7 +1866,7 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
         returning id, case_id, protocol, created_at::text
       `, [ctx.org.id, caseId, ctx.mainAccount.id, routed.account.id, routed.user.id, publicProtocol, JSON.stringify({ transfer: true }), body.summary || existing.need || null]);
       await pool.query("insert into handoff_events(handoff_id,type,payload,idempotency_key) values($1,'created',$2,$3)", [result.id, JSON.stringify({ reason: "Transferencia manual pelo CRM" }), `transfer:${result.id}`]);
-      const link = handoffLink(routed.phone, publicProtocol);
+      const link = handoffLink(existing.contact_phone, publicProtocol);
       return {
         case: shapeCase(await one(`${caseSelect} where c.id=$1 order by h.created_at desc limit 1`, [caseId])),
         handoff: {
@@ -1843,7 +1877,20 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
           destination_name: routed.name,
           destination_department: routed.departmentName,
           link,
-          message: externalHandoffMessage({ firstName: existing.contact_name ? String(existing.contact_name).split(/\s+/)[0] : null, responsibleName: routed.name, department: routed.departmentName, link, publicProtocol }),
+          message: externalHandoffMessage({
+            customerName: existing.contact_name || null,
+            firstName: existing.contact_name ? String(existing.contact_name).split(/\s+/)[0] : null,
+            customerPhone: existing.contact_phone || null,
+            customerCode: existing.customer_code || null,
+            company: existing.company_name || null,
+            city: existing.city || null,
+            uf: existing.uf || null,
+            need: existing.need || null,
+            responsibleName: routed.name,
+            department: routed.departmentName,
+            link,
+            publicProtocol
+          }),
           state: "created",
           created_at: result.created_at,
           events: []
@@ -1854,10 +1901,18 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       const ctx = await ready();
       const row = await one(`
         select h.id handoff_id, h.protocol, h.case_id, c.version case_version, h.destination_user_id, h.source_account_id,
-          wa.e164 destination_phone, u.display_name destination_name, d.name destination_department, co.display_name contact_name
+          wa.e164 destination_phone, u.display_name destination_name, d.name destination_department,
+          co.display_name contact_name, co.customer_code, ci.e164 contact_phone, c.company_name, c.city, c.uf, c.need
         from handoffs h
         join cases c on c.id=h.case_id
         join contacts co on co.id=c.contact_id
+        left join lateral (
+          select e164
+          from contact_identifiers
+          where organization_id=co.organization_id and contact_id=co.id and kind='phone'
+          order by (source='mvp_panel') desc, reliable desc, id
+          limit 1
+        ) ci on true
         join whatsapp_accounts wa on wa.id=h.destination_account_id
         join users u on u.id=h.destination_user_id
         left join departments d on d.id=c.department_id
@@ -1866,9 +1921,16 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
         limit 1
       `, [caseId]);
       if (!row) return { error: "case_not_found" };
-      const link = handoffLink(row.destination_phone, row.protocol);
+      const link = handoffLink(row.contact_phone, row.protocol);
       const message = externalHandoffMessage({
+        customerName: row.contact_name || null,
         firstName: row.contact_name ? String(row.contact_name).split(/\s+/)[0] : null,
+        customerPhone: row.contact_phone || null,
+        customerCode: row.customer_code || null,
+        company: row.company_name || null,
+        city: row.city || null,
+        uf: row.uf || null,
+        need: row.need || null,
         responsibleName: row.destination_name,
         department: row.destination_department || "Vendas",
         link,
@@ -1878,7 +1940,7 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
         insert into outbox_commands(organization_id,account_id,case_id,handoff_id,kind,payload,case_version,context_id,expected_user_id,expires_at)
         values($1,$2,$3,$4,'handoff_link',$5,$6,$7,$8,now()+interval '10 minutes')
         returning id, case_id, handoff_id, kind, payload, state, created_at::text, updated_at::text
-      `, [ctx.org.id, row.source_account_id || ctx.mainAccount.id, row.case_id, row.handoff_id, JSON.stringify({ message, link, protocol: row.protocol }), row.case_version, `case:${row.case_id}:handoff:${row.handoff_id}`, ctx.triageUser.id]);
+      `, [ctx.org.id, row.source_account_id || ctx.mainAccount.id, row.case_id, row.handoff_id, JSON.stringify({ message, link, protocol: row.protocol, destination_phone: row.destination_phone }), row.case_version, `case:${row.case_id}:handoff:${row.handoff_id}`, ctx.triageUser.id]);
       await pool.query("insert into handoff_events(handoff_id,type,payload,idempotency_key) values($1,'send_requested',$2,$3) on conflict do nothing", [row.handoff_id, JSON.stringify({ outbox_id: command.id }), `send_requested:${command.id}`]);
       return { command };
     },
@@ -1955,7 +2017,7 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       const phone = normalizePhone(destinationPhone || "");
       const rows = await many(`
         select h.id, h.case_id, h.protocol, wa.e164 destination_phone, u.display_name destination_name, d.name destination_department,
-          co.display_name contact_name, h.created_at::text,
+          co.display_name contact_name, co.customer_code, ci.e164 contact_phone, c.company_name, c.city, c.uf, c.need, h.created_at::text,
           coalesce(json_agg(json_build_object('type', he.type, 'at', he.at::text, 'payload', he.payload) order by he.id) filter (where he.id is not null), '[]') events,
           case when bool_or(he.type='claimed') then 'claimed' else 'created' end state
         from handoffs h
@@ -1964,9 +2026,16 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
         join cases c on c.id=h.case_id
         left join departments d on d.id=c.department_id
         join contacts co on co.id=c.contact_id
+        left join lateral (
+          select e164
+          from contact_identifiers
+          where organization_id=co.organization_id and contact_id=co.id and kind='phone'
+          order by (source='mvp_panel') desc, reliable desc, id
+          limit 1
+        ) ci on true
         left join handoff_events he on he.handoff_id=h.id
         where ($1::text is null or wa.e164=$1)
-        group by h.id, wa.e164, u.display_name, d.name, co.display_name
+        group by h.id, wa.e164, u.display_name, d.name, co.display_name, co.customer_code, ci.e164, c.company_name, c.city, c.uf, c.need
         having not bool_or(coalesce(he.type='claimed', false))
         order by h.created_at desc
         limit 100
@@ -1983,7 +2052,7 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       const crmCase = shapeCase(await one(`${caseSelect} where c.id=$1 order by h.created_at desc limit 1`, [found.case_id]));
       const row = await one(`
         select h.id, h.case_id, h.protocol, wa.e164 destination_phone, u.display_name destination_name, d.name destination_department,
-          co.display_name contact_name, h.created_at::text,
+          co.display_name contact_name, co.customer_code, ci.e164 contact_phone, c.company_name, c.city, c.uf, c.need, h.created_at::text,
           coalesce(json_agg(json_build_object('type', he.type, 'at', he.at::text, 'payload', he.payload) order by he.id) filter (where he.id is not null), '[]') events,
           case when bool_or(he.type='claimed') then 'claimed' else 'created' end state
         from handoffs h
@@ -1992,9 +2061,16 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
         join cases c on c.id=h.case_id
         left join departments d on d.id=c.department_id
         join contacts co on co.id=c.contact_id
+        left join lateral (
+          select e164
+          from contact_identifiers
+          where organization_id=co.organization_id and contact_id=co.id and kind='phone'
+          order by (source='mvp_panel') desc, reliable desc, id
+          limit 1
+        ) ci on true
         left join handoff_events he on he.handoff_id=h.id
         where h.id=$1
-        group by h.id, wa.e164, u.display_name, d.name, co.display_name
+        group by h.id, wa.e164, u.display_name, d.name, co.display_name, co.customer_code, ci.e164, c.company_name, c.city, c.uf, c.need
       `, [id]);
       return { handoff: shapeHandoff(row), case: crmCase };
     },

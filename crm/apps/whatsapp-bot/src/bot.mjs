@@ -196,11 +196,15 @@ async function handleConversation(page, snapshot) {
       context: { bot_training: training },
       messages: snapshot.messages
     });
-    const message = committed.outbox?.payload?.message || committed.handoff?.message || "";
-    if (message) {
-      await maybeSend(page, message, "transferencia");
+    const handoff = committed.handoff || {};
+    const message = handoff.message || committed.outbox?.payload?.message || "";
+    const destinationPhone = handoff.destination_phone || committed.outbox?.payload?.destination_phone || "";
+    if (message && destinationPhone) {
+      await sendToPhone(page, destinationPhone, message, "handoff para vendedor");
       markCooldown(snapshot);
       markAwaitingCustomer(snapshot);
+    } else if (message) {
+      log("Handoff criado, mas sem telefone de destino para envio automatico ao vendedor.");
     }
     return true;
   }
@@ -252,12 +256,16 @@ async function transferToPietra(page, snapshot, customerPhone) {
     responsiblePhone: config.pietraPhone,
     nextTask: "Pietra assumir atendimento transferido pela IA"
   });
-  const message = created.handoff?.message || created.outbox?.payload?.message || "";
-  if (message) {
-    await maybeSend(page, message, `transferencia para ${config.pietraName}`);
+  const handoff = created.handoff || {};
+  const message = handoff.message || created.outbox?.payload?.message || "";
+  const destinationPhone = handoff.destination_phone || created.outbox?.payload?.destination_phone || "";
+  if (message && destinationPhone) {
+    await sendToPhone(page, destinationPhone, message, `handoff para ${config.pietraName}`);
     markCooldown(snapshot);
     markAwaitingCustomer(snapshot);
     log(`Ficha criada: ${created.case?.protocol || created.case?.id || "sem protocolo"}; destino=${config.pietraName}`);
+  } else if (message) {
+    log(`Ficha criada, mas sem telefone de destino para envio automatico: ${created.case?.protocol || created.case?.id || "sem protocolo"}`);
   } else {
     log(`Ficha criada, mas sem mensagem de handoff retornada: ${created.case?.protocol || created.case?.id || "sem protocolo"}`);
   }
@@ -307,6 +315,24 @@ async function maybeSend(page, text, reason) {
     return;
   }
   log(`[supervised] Texto preparado no compositor (${reason}). Revise e envie manualmente.`);
+}
+
+async function sendToPhone(page, phone, text, reason) {
+  if (config.mode === "dry-run") {
+    log(`[dry-run] ${reason} para ${phone}: ${text}`);
+    return;
+  }
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (digits.length < 10) throw new Error(`telefone_destino_invalido:${phone || "vazio"}`);
+  await page.goto(`https://web.whatsapp.com/send?phone=${digits}`, { waitUntil: "domcontentloaded" });
+  await page.waitForFunction(() => Boolean(document.querySelector("#main footer [contenteditable='true']")), null, { timeout: 60000 });
+  await fillComposer(page, text);
+  if (config.mode === "auto") {
+    await page.keyboard.press("Enter");
+    log(`Mensagem enviada (${reason}) para ${phone}.`);
+    return;
+  }
+  log(`[supervised] Texto preparado para ${phone} (${reason}). Revise e envie manualmente.`);
 }
 
 async function waitForWhatsAppReady(page) {
