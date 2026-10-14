@@ -20,4 +20,9 @@ describe("CRM web page", () => {
   it("keeps administrative views stacked instead of forcing them into a flex row", () => {
     expect(html).toContain(".admin.view.active{display:block}");
   });
+
+  it("opens a directly linked CRM case after authentication", () => {
+    expect(html).toContain("url.searchParams.get('case')");
+    expect(html).toContain("openCard(result.case)");
+  });
 });

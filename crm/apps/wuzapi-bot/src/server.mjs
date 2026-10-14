@@ -6,7 +6,7 @@ const wuzapiBaseUrl = process.env.WUZAPI_BASE_URL || 'http://wuzapi:8080';
 const wuzapiToken = process.env.WUZAPI_USER_TOKEN || '';
 const groqApiKey = process.env.GROQ_API_KEY || '';
 const groqModel = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
-const botName = process.env.BOT_NAME || 'Pietra';
+const botName = 'Abraão';
 const companyName = process.env.COMPANY_NAME || 'ABR';
 const crmBaseUrl = (process.env.CRM_API_BASE_URL || '').replace(/\/+$/, '');
 const crmEmail = process.env.CRM_EMAIL || '';
@@ -256,7 +256,7 @@ function upsertConversation(phone, text) {
   const current = conversations.get(phone) || { phone, messages: [], name: '', city: '', uf: '', product: '', handoffAt: 0, pendingHandoff: false, transferTarget: null };
   current.messages.push({ from: 'customer', text, at: new Date().toISOString() });
   current.messages = current.messages.slice(-MAX_HISTORY);
-  const facts = extractFactsSmart(current.messages.map((message) => message.text).join('\n'));
+  const facts = extractFactsSmart(current.messages.filter((message) => message.from === 'customer').map((message) => message.text).join('\n'));
   current.name ||= facts.name;
   current.city ||= facts.city;
   current.uf ||= facts.uf;
@@ -350,6 +350,7 @@ function extractFactsSmart(text) {
 
 function wantsHumanSmart(text) {
   const normalized = normalizeText(text);
+  if (/\b(orcamento|cotacao|comprar|fechar pedido|fazer pedido)\b/i.test(normalized)) return true;
   if (/\b(transferir|transfere|encaminha|encaminhar|passa|passar|mande|manda|chama|chamar)\b/i.test(normalized)) return true;
   if (/\b(quero|preciso|gostaria|falar|atendimento)\b/i.test(normalized)
     && /\b(vendedor|vendedora|atendente|humano|pessoa|alguem|equipe comercial)\b/i.test(normalized)) return true;
@@ -374,6 +375,13 @@ function wantsPortfolio(text) {
   const normalized = normalizeText(text);
   return /\b(portfoli(?:o)?|portifolio|catalogo|produtos|linha de produtos)\b/.test(normalized)
     && /\b(quero|conhecer|informacao|informacoes|saber|mostrar|mostra|tem|vendem|vende)\b/.test(normalized);
+}
+
+function greetingReply(text) {
+  const normalized = normalizeText(text).replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!/^(oi|ola|bom dia|boa tarde|boa noite)$/.test(normalized)) return '';
+  const greeting = normalized === 'bom dia' ? 'Bom dia' : normalized === 'boa tarde' ? 'Boa tarde' : normalized === 'boa noite' ? 'Boa noite' : 'Olá';
+  return `${greeting}! Sou o Abraão, parceiro de negócios do Grupo ABR. Como posso ajudar?`;
 }
 
 function requestedPietra(text) {
@@ -472,10 +480,12 @@ async function askGroq(text, phone) {
         {
           role: 'system',
           content:
-            `Voce e ${botName}, assistente inicial da ${companyName}. ` +
-            'Responda em portugues do Brasil, de forma curta, humana e objetiva. ' +
+            `Voce e ${botName}, parceiro de negocios do ${companyName === 'ABR' ? 'Grupo ABR' : companyName}. ` +
+            'Apresente-se com essa identidade no primeiro contato. Responda em portugues do Brasil, em tom amigavel, educado e gentil, sempre de forma curta e direta ao ponto. ' +
             'Use no maximo duas frases, sem emoji, lista, markdown ou explicacao de regras internas. ' +
-            'Seu papel e acolher, responder objetivamente e coletar apenas a cidade quando ela for indispensavel para uma transferencia. ' +
+            'Seu papel e acolher, informar o portfolio, identificar o interesse e coletar apenas a cidade quando ela for indispensavel para transferir ao vendedor. ' +
+            'Voce nunca faz, prepara ou oferece orcamentos, cotacoes, calculos, precos, negociacoes ou fechamento de pedidos. ' +
+            'Quando houver intencao de comprar, pedir orcamento ou cotacao, encaminhe ao vendedor assim que houver cidade; nunca peca quantidade ou medidas para cotar. ' +
             'Nao peca nome, produto, quantidade ou medida como condicao para transferir. ' +
             'Nao peca de novo um dado que ja foi informado e nunca diga que o cliente ainda precisa confirmar cidade se ela estiver nos dados ja informados. ' +
             'Quando perguntarem pelo portfolio, informe que trabalhamos com telhas (incluindo Telhas PIR ABR Telhas), perfil estrutural, tubos e metalons, vergalhao, malha e trelica. ' +
@@ -534,18 +544,24 @@ async function getCrmToken() {
 
 function handoffSummary(conversation) {
   const useful = conversation.messages
-    .map((message) => message.text)
+    .map((message) => `${message.from === 'assistant' ? 'Abraão' : 'Cliente'}: ${message.text}`)
     .filter(Boolean)
     .slice(-8)
-    .join(' | ');
+    .join('\n');
   return [
     `Atendimento iniciado pelo bot.`,
     conversation.name ? `Nome: ${conversation.name}.` : '',
     conversation.city ? `Cidade: ${conversation.city}.` : '',
     conversation.uf ? `UF: ${conversation.uf}.` : '',
     conversation.product ? `Interesse: ${conversation.product}.` : '',
-    useful ? `Conversa: ${useful}` : ''
+    useful ? `Prévia do diálogo:\n${useful}` : ''
   ].filter(Boolean).join('\n').slice(0, 1000);
+}
+
+function appendCrmCaseLink(message, baseUrl, caseId) {
+  const root = String(baseUrl || '').replace(/\/+$/, '');
+  if (!root || !caseId) return message;
+  return `${message}\nFicha no CRM: ${root}/crm?case=${encodeURIComponent(caseId)}`;
 }
 
 function inferBotSalesFunction(conversation) {
@@ -592,7 +608,7 @@ async function transferToSeller(phone, conversation) {
   const { created, outbox } = await createHandoff(phone, conversation);
   const handoff = created.handoff || {};
   const command = outbox.command || {};
-  const message = handoff.message || command.payload?.message || '';
+  const message = appendCrmCaseLink(handoff.message || command.payload?.message || '', crmBaseUrl, created.case?.id);
   const destinationPhone = handoff.destination_phone || command.payload?.destination_phone || '';
   const sellerName = handoff.destination_name || 'vendedor responsavel';
   const protocol = handoff.protocol || created.case?.protocol || command.payload?.protocol || '';
@@ -612,7 +628,7 @@ async function transferToSeller(phone, conversation) {
     const sellerRecipient = await resolveWhatsAppRecipient(normalizedDestination);
     await sendWhatsAppText(sellerRecipient, message);
   }
-  await sendWhatsAppText(phone, `#ParceirACO obrigado pelo contato, em breve o vendedor ${sellerName} ira atende-lo.${protocol ? ` Protocolo ${protocol}.` : ''}`);
+  await sendCustomerReply(phone, `#ParceirACO obrigado pelo contato, em breve o vendedor ${sellerName} ira atende-lo.${protocol ? ` Protocolo ${protocol}.` : ''}`);
   return { sellerName, protocol, destinationPhone: Boolean(destinationPhone) };
 }
 
@@ -654,6 +670,17 @@ async function sendWhatsAppText(phone, body) {
     throw new Error(`WuzAPI send failed ${response.status}: ${JSON.stringify(payload).slice(0, 300)}`);
   }
   return payload;
+}
+
+async function sendCustomerReply(phone, body) {
+  const result = await sendWhatsAppText(phone, body);
+  const conversation = conversations.get(phone);
+  if (conversation) {
+    conversation.messages.push({ from: 'assistant', text: body, at: new Date().toISOString() });
+    conversation.messages = conversation.messages.slice(-MAX_HISTORY);
+    conversations.set(phone, conversation);
+  }
+  return result;
 }
 
 async function handleWebhook(req, res) {
@@ -703,8 +730,18 @@ async function handleWebhook(req, res) {
     return;
   }
 
-  if (wantsPortfolio(text) && !wantsHumanSmart(text)) {
-    await sendWhatsAppText(phone, PORTFOLIO_REPLY);
+  const greeting = greetingReply(text);
+  const customerMessageCount = conversation.messages.filter((message) => message.from === 'customer').length;
+  if (greeting && customerMessageCount === 1) {
+    await sendCustomerReply(phone, greeting);
+    console.log(JSON.stringify({ event: 'introduced', phone, id }));
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+
+  if (wantsPortfolio(text)) {
+    await sendCustomerReply(phone, PORTFOLIO_REPLY);
     console.log(JSON.stringify({ event: 'portfolio_replied', phone, id }));
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true }));
@@ -724,7 +761,7 @@ async function handleWebhook(req, res) {
       conversations.set(phone, conversation);
       const cityIssue = /routing_city_required|Cidade obrigatoria/i.test(error.message);
       const destinationIssue = /routing_destination_unavailable/i.test(error.message);
-      await sendWhatsAppText(
+      await sendCustomerReply(
         phone,
         cityIssue
           ? 'Em qual cidade e UF voce precisa do atendimento?'
@@ -743,23 +780,15 @@ async function handleWebhook(req, res) {
   const missing = missingQuestions(conversation);
   if (missing.length && wantsHumanSmart(text)) {
     const reply = 'Claro. Em qual cidade e UF voce precisa do atendimento?';
-    await sendWhatsAppText(phone, reply);
+    await sendCustomerReply(phone, reply);
     console.log(JSON.stringify({ event: 'asked_missing_before_handoff', phone, id, missing }));
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true }));
     return;
   }
 
-  if (wantsPortfolio(text)) {
-    await sendWhatsAppText(phone, PORTFOLIO_REPLY);
-    console.log(JSON.stringify({ event: 'portfolio_replied', phone, id }));
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok: true }));
-    return;
-  }
-
   const reply = await askGroq(text, phone);
-  await sendWhatsAppText(phone, reply);
+  await sendCustomerReply(phone, reply);
   console.log(JSON.stringify({ event: 'replied', phone, id }));
 
   res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -794,5 +823,5 @@ if (process.env.BOT_TEST_MODE !== 'true') {
   });
 }
 
-export { extractFactsSmart, isReadyForHandoff, missingQuestions, requestedPietra, wantsHumanSmart, wantsPortfolio };
+export { appendCrmCaseLink, extractFactsSmart, greetingReply, handoffSummary, isReadyForHandoff, missingQuestions, requestedPietra, wantsHumanSmart, wantsPortfolio };
 

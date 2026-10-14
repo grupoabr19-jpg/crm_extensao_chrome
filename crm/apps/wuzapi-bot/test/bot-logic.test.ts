@@ -29,11 +29,36 @@ describe("WuzAPI bot conversation logic", () => {
     expect(bot.wantsHumanSmart(message)).toBe(false);
   });
 
-  it("does not mistake a portfolio sentence for a customer name or transfer command", () => {
+  it("does not mistake a portfolio purchase sentence for a customer name", () => {
     const message = "quero comprar aço, me fale sobre seu portfolio de produtos";
     expect(bot.extractFactsSmart(message)).toMatchObject({ name: "", product: "Aco" });
     expect(bot.wantsPortfolio(message)).toBe(true);
-    expect(bot.wantsHumanSmart(message)).toBe(false);
+    expect(bot.wantsHumanSmart(message)).toBe(true);
+  });
+
+  it("introduces Abraão and treats quote intent as a seller handoff", () => {
+    expect(bot.greetingReply("boa tarde")).toBe("Boa tarde! Sou o Abraão, parceiro de negócios do Grupo ABR. Como posso ajudar?");
+    expect(bot.wantsHumanSmart("quero fazer orçamento")).toBe(true);
+    expect(bot.wantsHumanSmart("preciso de uma cotação")).toBe(true);
+  });
+
+  it("builds a seller preview and a direct CRM case link", () => {
+    const summary = bot.handoffSummary({
+      name: "Thiago",
+      city: "Cambui",
+      uf: "MG",
+      product: "Telha",
+      messages: [
+        { from: "customer", text: "quero telhas" },
+        { from: "assistant", text: "Em qual cidade?" },
+        { from: "customer", text: "Cambui MG" }
+      ]
+    });
+    expect(summary).toContain("Prévia do diálogo:");
+    expect(summary).toContain("Cliente: quero telhas");
+    expect(summary).toContain("Abraão: Em qual cidade?");
+    expect(bot.appendCrmCaseLink("Protocolo: ABR-TEST-0001", "https://crm.example.com/", "case-123"))
+      .toContain("Ficha no CRM: https://crm.example.com/crm?case=case-123");
   });
 
   it("only transfers after an explicit request and requires city, not a specific product", () => {

@@ -222,6 +222,17 @@
       await loadFunnels();
       if (!state.authToken || revision !== state.authRevision) return;
       await Promise.all([loadBoard(), loadKpis(), loadReactivationAlerts()]);
+      await openLinkedCase().catch(err => say('Erro ao abrir ficha: ' + err.message));
+    }
+    async function openLinkedCase() {
+      const url = new URL(location.href);
+      const caseId = url.searchParams.get('case');
+      if (!caseId) return;
+      const result = await json(`/v1/cases/${encodeURIComponent(caseId)}`);
+      showView('board');
+      openCard(result.case);
+      url.searchParams.delete('case');
+      history.replaceState(null, '', url.pathname + url.search + url.hash);
     }
     $('loginForm').addEventListener('submit', async ev => {
       ev.preventDefault();
