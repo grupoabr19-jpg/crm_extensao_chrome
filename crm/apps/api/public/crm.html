@@ -586,7 +586,7 @@
         return;
       }
       $('sellerRows').innerHTML = state.sellers.map(s => {
-        const routes = (s.routes || []).filter(r => r.active !== false).map(r => `<span class="pill">${escapeHtml(r.channel)} ${escapeHtml(r.route_type)} ${escapeHtml(r.route_value)}</span>`).join('') || '<span class="muted">Sem rota</span>';
+        const routes = (s.routes || []).filter(r => r.active !== false).map(r => `<span class="pill">${escapeHtml(r.channel)} ${escapeHtml(r.route_type)} ${escapeHtml(r.route_value)}${r.region && r.region !== r.route_value ? ` · ${escapeHtml(r.region)}` : ''}</span>`).join('') || '<span class="muted">Sem rota</span>';
         return `<tr>
           <td><b>${escapeHtml(s.name)}</b><div class="muted">${escapeHtml(s.email || '')}</div>${s.whatsapp_e164 ? `<div class="muted">${escapeHtml(s.whatsapp_e164)}</div>` : '<span class="pill off">sem WhatsApp</span>'}</td>
           <td>${escapeHtml(s.role || '-')} ${s.active ? '' : '<span class="pill off">inativo</span>'}</td>

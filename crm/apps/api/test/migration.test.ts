@@ -17,6 +17,7 @@ beforeAll(async () => {
   await db.exec(sql("0013_sales_workflow.sql"));
   org = (await q("insert into organizations(name) values('ABR teste') returning id"))[0].id;
   await db.exec(sql("0014_operator_transfer_profiles.sql"));
+  await db.exec(sql("0015_wholesale_ddd_routes.sql"));
   await db.exec(sql("seed_reference_demo.sql").replaceAll(":'org_id'", `'${org}'`));
 }, 60_000);
 
@@ -73,6 +74,14 @@ describe("migration 0001 em PostgreSQL real (PGlite)", () => {
     expect(leaders).toHaveLength(8);
     expect(leaders).toContainEqual(expect.objectContaining({ display_name: "Alessandro Takahashi", route_value: "BRAGANCA" }));
     expect(leaders).toContainEqual(expect.objectContaining({ display_name: "Gustavo Alvarenga", route_value: "EXTREMA" }));
+  });
+  it("distribui o atacado entre os nove DDDs e seus polos", async () => {
+    const routes = await q("select u.display_name,sr.route_value,sr.region from seller_profiles sp join users u on u.id=sp.user_id join seller_routes sr on sr.profile_id=sp.id where sp.organization_id=$1 and sr.channel='atacado' and sr.route_type='ddd' and sr.active=true order by sr.route_value", [org]);
+    expect(routes).toHaveLength(9);
+    expect(routes).toContainEqual(expect.objectContaining({ display_name: "Wilson Neto", route_value: "14", region: "BAURU" }));
+    expect(routes).toContainEqual(expect.objectContaining({ display_name: "Wilson Neto", route_value: "18", region: "PRESIDENTE PRUDENTE" }));
+    expect(routes).toContainEqual(expect.objectContaining({ display_name: "Larissa Terra", route_value: "11", region: "SAO PAULO" }));
+    expect(routes).toContainEqual(expect.objectContaining({ display_name: "Julio Melo", route_value: "19", region: "CAMPINAS" }));
   });
   it("outbox: estado 'uncertain' exige execução iniciada; override manual exige motivo", async () => {
     const u = (await q("select id from users limit 1"))[0].id;
