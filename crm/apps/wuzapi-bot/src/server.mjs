@@ -26,7 +26,7 @@ let crmSession = { token: '', expiresAt: 0 };
 const MAX_SEEN = 500;
 const MAX_HISTORY = 12;
 const HANDOFF_LOCK_MS = 12 * 60 * 60 * 1000;
-const PORTFOLIO_REPLY = 'Trabalhamos com telhas, incluindo Telhas PIR ABR Telhas, perfil estrutural, tubos e metalons, vergalhao, malha e trelica. Qual dessas linhas voce quer conhecer melhor?';
+const PORTFOLIO_REPLY = 'Claro! No Grupo ABR trabalhamos com telhas, incluindo Telhas PIR ABR Telhas, perfil estrutural, tubos e metalons, vergalhão, malha e treliça. Qual dessas linhas você quer conhecer melhor?';
 const BLOCKED_DESTINATION_PHONES = new Set(['5511999990001', '5511999990000']);
 const CITY_ALIASES = new Map([
   ['cambui', 'Cambui'],
@@ -253,7 +253,7 @@ function extractName(raw, commaParts, city, product) {
 }
 
 function upsertConversation(phone, text) {
-  const current = conversations.get(phone) || { phone, messages: [], name: '', city: '', uf: '', product: '', handoffAt: 0, pendingHandoff: false, transferTarget: null };
+  const current = conversations.get(phone) || { phone, messages: [], name: '', city: '', uf: '', product: '', handoffAt: 0, pendingHandoff: false, purchaseIntent: false, commercialHandoffRequested: false, transferTarget: null };
   current.messages.push({ from: 'customer', text, at: new Date().toISOString() });
   current.messages = current.messages.slice(-MAX_HISTORY);
   const facts = extractFactsSmart(current.messages.filter((message) => message.from === 'customer').map((message) => message.text).join('\n'));
@@ -350,7 +350,6 @@ function extractFactsSmart(text) {
 
 function wantsHumanSmart(text) {
   const normalized = normalizeText(text);
-  if (/\b(orcamento|cotacao|comprar|fechar pedido|fazer pedido)\b/i.test(normalized)) return true;
   if (/\b(transferir|transfere|encaminha|encaminhar|passa|passar|mande|manda|chama|chamar)\b/i.test(normalized)) return true;
   if (/\b(quero|preciso|gostaria|falar|atendimento)\b/i.test(normalized)
     && /\b(vendedor|vendedora|atendente|humano|pessoa|alguem|equipe comercial)\b/i.test(normalized)) return true;
@@ -358,6 +357,28 @@ function wantsHumanSmart(text) {
   if (textWords.some((word) => ['trasfere', 'tranferir', 'encaminha'].includes(word))) return true;
   const hasRequest = textWords.some((word) => ['quero', 'preciso', 'gostaria', 'falar', 'atendimento'].includes(word));
   return hasRequest && textWords.some((word) => ['vendedo', 'vendendor', 'atendete'].includes(word));
+}
+
+function wantsQuote(text) {
+  const normalized = normalizeText(text);
+  return /\b(orcamento|cotacao|preco|valor|fechar pedido|fazer pedido)\b/.test(normalized)
+    || /\bquanto (?:custa|fica|sai)\b/.test(normalized);
+}
+
+function wantsPurchase(text) {
+  const normalized = normalizeText(text);
+  return /\b(comprar|adquirir|preciso de|tenho interesse em)\b/.test(normalized);
+}
+
+function hasQualificationDetail(conversation) {
+  const customerText = normalizeText(
+    (conversation?.messages || [])
+      .filter((message) => message.from === 'customer')
+      .map((message) => message.text)
+      .join(' ')
+  );
+  return /\b\d+(?:[.,]\d+)?\s*(?:m2|m²|metros? quadrados?|metros?|cm|mm|kg|quilos?|toneladas?|unidades?|pecas?|barras?|chapas?|rolos?)\b/.test(customerText)
+    || /\b(obra|cobertura|telhado|galpao|serralheria|estrutura|fabricacao|revenda|industria|construtora|reforma|projeto|uso proprio|cliente final)\b/.test(customerText);
 }
 
 function isReadyForHandoff(conversation, text) {
@@ -379,9 +400,28 @@ function wantsPortfolio(text) {
 
 function greetingReply(text) {
   const normalized = normalizeText(text).replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim();
-  if (!/^(oi|ola|bom dia|boa tarde|boa noite)$/.test(normalized)) return '';
-  const greeting = normalized === 'bom dia' ? 'Bom dia' : normalized === 'boa tarde' ? 'Boa tarde' : normalized === 'boa noite' ? 'Boa noite' : 'Olá';
-  return `${greeting}! Sou o Abraão, parceiro de negócios do Grupo ABR. Como posso ajudar?`;
+  if (!/^(?:(?:oi|ola)\s*)?(?:bom dia|boa tarde|boa noite)?$/.test(normalized) || !normalized) return '';
+  const greeting = normalized.includes('bom dia') ? 'Bom dia' : normalized.includes('boa tarde') ? 'Boa tarde' : normalized.includes('boa noite') ? 'Boa noite' : 'Olá';
+  return `${greeting}! Sou o Abraão, parceiro de negócios do Grupo ABR. Que bom falar com você — como posso ajudar?`;
+}
+
+function productLabel(product) {
+  const labels = {
+    Aco: 'aço',
+    Vergalhao: 'vergalhão',
+    Trelica: 'treliça'
+  };
+  return labels[product] || String(product || 'material').toLowerCase();
+}
+
+function purchaseInterestReply(conversation) {
+  if (!conversation?.product) {
+    return 'Que bom saber do seu interesse! Temos diferentes linhas de aço para atender cada necessidade. Qual produto ou aplicação você procura?';
+  }
+  if (hasQualificationDetail(conversation) && !conversation?.city) {
+    return `Que bom saber do seu interesse em ${productLabel(conversation.product)}! Já anotei a aplicação. Em qual cidade e UF será o atendimento?`;
+  }
+  return `Que bom saber do seu interesse em ${productLabel(conversation.product)}! Quero entender sua necessidade para registrar tudo direitinho. Qual será a aplicação do material?`;
 }
 
 function requestedPietra(text) {
@@ -466,6 +506,12 @@ async function askGroq(text, phone) {
   const known = conversation
     ? `Dados ja informados: nome=${conversation.name || 'nao informado'}, cidade=${conversation.city || 'nao informada'}, UF=${conversation.uf || 'nao informada'}, produto=${conversation.product || 'nao informado'}.`
     : '';
+  const history = (conversation?.messages || [])
+    .slice(-9, -1)
+    .map((message) => ({
+      role: message.from === 'assistant' ? 'assistant' : 'user',
+      content: message.text
+    }));
   const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -474,19 +520,21 @@ async function askGroq(text, phone) {
     },
     body: JSON.stringify({
       model: groqModel,
-      temperature: 0.35,
+      temperature: 0.45,
       max_tokens: 320,
       messages: [
         {
           role: 'system',
           content:
             `Voce e ${botName}, parceiro de negocios do ${companyName === 'ABR' ? 'Grupo ABR' : companyName}. ` +
-            'Apresente-se com essa identidade no primeiro contato. Responda em portugues do Brasil, em tom amigavel, educado e gentil, sempre de forma curta e direta ao ponto. ' +
-            'Use no maximo duas frases, sem emoji, lista, markdown ou explicacao de regras internas. ' +
-            'Seu papel e acolher, informar o portfolio, identificar o interesse e coletar apenas a cidade quando ela for indispensavel para transferir ao vendedor. ' +
-            'Voce nunca faz, prepara ou oferece orcamentos, cotacoes, calculos, precos, negociacoes ou fechamento de pedidos. ' +
-            'Quando houver intencao de comprar, pedir orcamento ou cotacao, encaminhe ao vendedor assim que houver cidade; nunca peca quantidade ou medidas para cotar. ' +
-            'Nao peca nome, produto, quantidade ou medida como condicao para transferir. ' +
+            'Apresente-se com essa identidade no primeiro contato. Responda em portugues do Brasil, em tom caloroso, amigavel, educado e gentil, mas sem enrolacao. ' +
+            'Use no maximo tres frases curtas, sem emoji, lista, markdown ou explicacao de regras internas. Primeiro reconheca o que o cliente disse e depois faca no maximo uma pergunta util. ' +
+            'Seu papel e conversar, explicar os produtos do catalogo conhecido, tirar duvidas gerais e enriquecer a ficha antes de encaminhar ao vendedor. ' +
+            'Intencao de compra nao e ordem de transferencia: converse e qualifique. Pergunte, sem interrogatorio e apenas quando fizer sentido, nome ou empresa, cidade/UF, produto ou formato desejado, aplicacao, medidas, quantidade aproximada e momento da compra. ' +
+            'Voce nunca faz, prepara, calcula ou oferece orcamentos ou cotacoes; nunca informa ou estima preco, desconto, estoque, prazo de entrega, condicao de pagamento, credito ou negociacao. ' +
+            'Nunca cite, avalie ou compare concorrentes. Nunca prometa disponibilidade, resultado tecnico, certificacao, reserva, entrega, contato ou fechamento. Nao solicite documentos, senha, dados bancarios ou de cartao. ' +
+            'Se pedirem preco, orcamento ou cotacao, diga com naturalidade que o vendedor responsavel cuidara disso e aproveite para coletar somente um dado util que ainda esteja faltando. ' +
+            'Quantidade, medida, aplicacao e nome ajudam a ficha, mas nao sao condicao obrigatoria se o cliente pedir explicitamente para falar com um vendedor. ' +
             'Nao peca de novo um dado que ja foi informado e nunca diga que o cliente ainda precisa confirmar cidade se ela estiver nos dados ja informados. ' +
             'Quando perguntarem pelo portfolio, informe que trabalhamos com telhas (incluindo Telhas PIR ABR Telhas), perfil estrutural, tubos e metalons, vergalhao, malha e trelica. ' +
             'Conhecimento comercial: telhas PIR devem ser tratadas e vendidas como ABR Telhas. ' +
@@ -494,6 +542,7 @@ async function askGroq(text, phone) {
             'Nao invente dados, precos, prazos ou promessas. ' +
             known
         },
+        ...history,
         {
           role: 'user',
           content: `Cliente ${phone}: ${text}`
@@ -507,7 +556,39 @@ async function askGroq(text, phone) {
     throw new Error(`Groq HTTP ${response.status}: ${JSON.stringify(payload).slice(0, 300)}`);
   }
 
-  return payload?.choices?.[0]?.message?.content?.trim() || 'Certo, vou verificar isso para voce.';
+  const reply = payload?.choices?.[0]?.message?.content?.trim() || 'Entendi. Conte um pouco mais sobre o que você precisa para eu registrar corretamente.';
+  return enforceCommercialBoundaries(reply, conversation);
+}
+
+function qualificationReply(conversation) {
+  if (!conversation?.product) {
+    return 'Entendi. Será um prazer ajudar — qual produto ou tipo de material você procura?';
+  }
+  if (!conversation?.city) {
+    return `Ótimo, entendi seu interesse em ${conversation.product}. Em qual cidade e UF será o atendimento?`;
+  }
+  return `Perfeito, já registrei seu interesse em ${conversation.product} para ${conversation.city}. Qual será a aplicação, medida ou quantidade aproximada?`;
+}
+
+function commercialQualificationReply(conversation) {
+  if (!conversation?.product) {
+    return 'Com certeza! O orçamento será tratado pelo vendedor responsável. Qual produto ou tipo de material você procura?';
+  }
+  if (!conversation?.city) {
+    return 'Com certeza! O vendedor responsável cuidará do orçamento. Em qual cidade e UF será o atendimento?';
+  }
+  return `Perfeito, já registrei ${productLabel(conversation.product)} para ${conversation.city}. Para deixar sua ficha bem direcionada, qual é a aplicação, medida ou quantidade aproximada?`;
+}
+
+function enforceCommercialBoundaries(reply, conversation) {
+  const normalized = normalizeText(reply);
+  const offersQuote = /\b(posso|podemos|vou|vamos|consigo|iremos)\b.{0,40}\b(preparar|fazer|montar|calcular|enviar|passar)\b.{0,30}\b(orcamento|cotacao|preco|valor)\b/.test(normalized);
+  const statesPrice = /\b(o preco|o valor|fica por|custa|sai por)\b/.test(normalized);
+  const claimsStockOrDelivery = /\b(temos|produto|material)\b.{0,30}\b(em estoque|disponivel para entrega|pronta entrega)\b|\b(entregamos|chega)\b.{0,20}\b(hoje|amanha|em \d+ dias)\b/.test(normalized);
+  const mentionsCompetitor = /\b(concorrente|concorrencia|outra empresa|outra marca)\b/.test(normalized);
+  return offersQuote || statesPrice || claimsStockOrDelivery || mentionsCompetitor
+    ? qualificationReply(conversation)
+    : reply;
 }
 
 async function crmFetch(path, options = {}) {
@@ -621,6 +702,8 @@ async function transferToSeller(phone, conversation) {
   // any network send so a retry cannot create another case/protocol.
   conversation.handoffAt = Date.now();
   conversation.pendingHandoff = false;
+  conversation.purchaseIntent = false;
+  conversation.commercialHandoffRequested = false;
   conversation.transferTarget = null;
   conversations.set(phone, conversation);
 
@@ -628,7 +711,7 @@ async function transferToSeller(phone, conversation) {
     const sellerRecipient = await resolveWhatsAppRecipient(normalizedDestination);
     await sendWhatsAppText(sellerRecipient, message);
   }
-  await sendCustomerReply(phone, `#ParceirACO obrigado pelo contato, em breve o vendedor ${sellerName} ira atende-lo.${protocol ? ` Protocolo ${protocol}.` : ''}`);
+  await sendCustomerReply(phone, `Obrigado pela conversa! Já encaminhei sua ficha para ${sellerName}, que continuará o atendimento.${protocol ? ` Protocolo ${protocol}.` : ''}`);
   return { sellerName, protocol, destinationPhone: Boolean(destinationPhone) };
 }
 
@@ -718,11 +801,18 @@ async function handleWebhook(req, res) {
 
   console.log(JSON.stringify({ event: 'incoming', phone, id, preview: text.slice(0, 80) }));
   const conversation = upsertConversation(phone, text);
-  if (wantsHumanSmart(text) && pietraPhone) {
-    conversation.pendingHandoff = true;
+  const explicitHandoff = wantsHumanSmart(text);
+  const quoteRequest = wantsQuote(text);
+  const purchaseRequest = wantsPurchase(text);
+  if (purchaseRequest) conversation.purchaseIntent = true;
+  if (quoteRequest) conversation.commercialHandoffRequested = true;
+  if ((explicitHandoff || conversation.purchaseIntent || conversation.commercialHandoffRequested) && pietraPhone) {
     conversation.transferTarget = { name: pietraName, phone: pietraPhone };
-    conversations.set(phone, conversation);
   }
+  if (explicitHandoff || ((conversation.purchaseIntent || conversation.commercialHandoffRequested) && conversation.city && conversation.product && hasQualificationDetail(conversation))) {
+    conversation.pendingHandoff = true;
+  }
+  conversations.set(phone, conversation);
   if (conversation.handoffAt && Date.now() - conversation.handoffAt < HANDOFF_LOCK_MS) {
     console.log(JSON.stringify({ event: 'ignored', reason: 'handoff_lock', phone, id }));
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -743,6 +833,26 @@ async function handleWebhook(req, res) {
   if (wantsPortfolio(text)) {
     await sendCustomerReply(phone, PORTFOLIO_REPLY);
     console.log(JSON.stringify({ event: 'portfolio_replied', phone, id }));
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+
+  if (purchaseRequest && !quoteRequest && !conversation.pendingHandoff) {
+    const reply = purchaseInterestReply(conversation);
+    await sendCustomerReply(phone, reply);
+    console.log(JSON.stringify({ event: 'purchase_interest', phone, id }));
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+
+  if ((conversation.purchaseIntent || conversation.commercialHandoffRequested) && !conversation.pendingHandoff) {
+    const reply = conversation.commercialHandoffRequested
+      ? commercialQualificationReply(conversation)
+      : qualificationReply(conversation);
+    await sendCustomerReply(phone, reply);
+    console.log(JSON.stringify({ event: 'commercial_qualification', phone, id }));
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true }));
     return;
@@ -778,8 +888,8 @@ async function handleWebhook(req, res) {
   }
 
   const missing = missingQuestions(conversation);
-  if (missing.length && wantsHumanSmart(text)) {
-    const reply = 'Claro. Em qual cidade e UF voce precisa do atendimento?';
+  if (missing.length && explicitHandoff) {
+    const reply = 'Perfeito, eu faço esse encaminhamento. Em qual cidade e UF será o atendimento?';
     await sendCustomerReply(phone, reply);
     console.log(JSON.stringify({ event: 'asked_missing_before_handoff', phone, id, missing }));
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -823,5 +933,4 @@ if (process.env.BOT_TEST_MODE !== 'true') {
   });
 }
 
-export { appendCrmCaseLink, extractFactsSmart, greetingReply, handoffSummary, isReadyForHandoff, missingQuestions, requestedPietra, wantsHumanSmart, wantsPortfolio };
-
+export { appendCrmCaseLink, commercialQualificationReply, enforceCommercialBoundaries, extractFactsSmart, greetingReply, handoffSummary, hasQualificationDetail, isReadyForHandoff, missingQuestions, purchaseInterestReply, qualificationReply, requestedPietra, wantsHumanSmart, wantsPortfolio, wantsPurchase, wantsQuote };

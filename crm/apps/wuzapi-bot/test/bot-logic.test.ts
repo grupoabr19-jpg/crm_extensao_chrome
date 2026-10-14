@@ -33,13 +33,40 @@ describe("WuzAPI bot conversation logic", () => {
     const message = "quero comprar aço, me fale sobre seu portfolio de produtos";
     expect(bot.extractFactsSmart(message)).toMatchObject({ name: "", product: "Aco" });
     expect(bot.wantsPortfolio(message)).toBe(true);
-    expect(bot.wantsHumanSmart(message)).toBe(true);
+    expect(bot.wantsHumanSmart(message)).toBe(false);
   });
 
-  it("introduces Abraão and treats quote intent as a seller handoff", () => {
-    expect(bot.greetingReply("boa tarde")).toBe("Boa tarde! Sou o Abraão, parceiro de negócios do Grupo ABR. Como posso ajudar?");
-    expect(bot.wantsHumanSmart("quero fazer orçamento")).toBe(true);
-    expect(bot.wantsHumanSmart("preciso de uma cotação")).toBe(true);
+  it("introduces Abraão warmly and distinguishes purchase from handoff intent", () => {
+    expect(bot.greetingReply("oi boa tarde")).toBe("Boa tarde! Sou o Abraão, parceiro de negócios do Grupo ABR. Que bom falar com você — como posso ajudar?");
+    expect(bot.wantsHumanSmart("quero comprar aço")).toBe(false);
+    expect(bot.wantsHumanSmart("quero fazer orçamento")).toBe(false);
+    expect(bot.wantsHumanSmart("preciso de uma cotação")).toBe(false);
+    expect(bot.wantsQuote("quero fazer orçamento")).toBe(true);
+    expect(bot.wantsQuote("quanto custa a telha?")).toBe(true);
+    expect(bot.wantsPurchase("quero comprar aço")).toBe(true);
+    expect(bot.purchaseInterestReply({ product: "Aco" })).toContain("interesse em aço");
+  });
+
+  it("qualifies quote requests before handoff but never blocks an explicit transfer", () => {
+    const messages = [
+      { from: "customer", text: "quero orçamento de telhas" },
+      { from: "customer", text: "é para a cobertura de um galpão" }
+    ];
+    expect(bot.hasQualificationDetail({ messages })).toBe(true);
+    expect(bot.hasQualificationDetail({ messages: [{ from: "customer", text: "quero comprar telhas" }] })).toBe(false);
+    expect(bot.commercialQualificationReply({ product: "Telha", city: "Cambui" }))
+      .toContain("aplicação, medida ou quantidade aproximada");
+    expect(bot.wantsHumanSmart("transfere pra Pietra")).toBe(true);
+  });
+
+  it("blocks commercial promises while allowing consultative qualification", () => {
+    const conversation = { product: "Aco", city: "Cambui" };
+    expect(bot.enforceCommercialBoundaries("Posso preparar um orçamento para você.", conversation))
+      .toContain("aplicação, medida ou quantidade aproximada");
+    expect(bot.enforceCommercialBoundaries("Temos esse material em estoque para entrega amanhã.", conversation))
+      .toContain("aplicação, medida ou quantidade aproximada");
+    expect(bot.enforceCommercialBoundaries("Para qual aplicação você precisa do aço?", conversation))
+      .toBe("Para qual aplicação você precisa do aço?");
   });
 
   it("builds a seller preview and a direct CRM case link", () => {
