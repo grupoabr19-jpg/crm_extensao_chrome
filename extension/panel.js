@@ -497,6 +497,7 @@
       return !!destinationStage;
     });
     var isWon = destinationStage && String(destinationStage.name || '').toLowerCase() === 'venda ganha';
+    var isLost = destinationStage && String(destinationStage.name || '').toLowerCase() === 'venda perdida';
     if (isWon && !(Number(value('saleValue').replace(',', '.')) > 0)) {
       renderPipelineTracker();
       return say('Informe o valor do orçamento antes de marcar como venda ganha.', 'warn');
@@ -511,19 +512,17 @@
     var saveBeforeWinning = isWon
       ? request('/v1/cases/' + encodeURIComponent(current.id), { method: 'PATCH', body: JSON.stringify(caseFormPayload()) })
       : Promise.resolve();
-    var movedCase = null;
     saveBeforeWinning.then(function () { return request('/v1/cases/' + encodeURIComponent(current.id) + '/stage', {
       method: 'POST',
       body: JSON.stringify({ stageId: stageId })
     }); }).then(function (result) {
-      movedCase = result.case || null;
       if (result.case) {
         var index = crmCases.findIndex(function (item) { return item.id === result.case.id; });
         if (index >= 0) crmCases[index] = result.case;
       }
       return loadCrmData(current.id);
     }).then(function () {
-      say(movedCase && movedCase.lost_at ? 'Venda perdida enviada automaticamente ao funil de reativação.' : 'Etapa atualizada. O card do Kanban já reflete esta mudança.', 'ok');
+      say(isLost ? 'Venda perdida enviada automaticamente ao funil de reativação.' : 'Etapa atualizada. O card do Kanban já reflete esta mudança.', 'ok');
     }).catch(function (err) {
       activePipelineId = (funnelForCase(current) || {}).id || activePipelineId;
       renderPipelineTracker();
