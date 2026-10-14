@@ -1,0 +1,7 @@
+.secrets/
+Clientes Inativos.xlsx
+Gestão da Produção.xlsx
+.deploy/*.env
+.deploy/*.tar.gz
+.deploy/*.tgz
+.deploy/*qr*.png

@@ -94,7 +94,7 @@ function inferSalesFunction(input) {
   if (/(CONSTRUCAO|CONSTRUTORA|OBRA|CIVIL|ENGENHARIA)/.test(text)) return "construcao_civil";
   if (/(CORPORATIVO|TRANSPORTE|MANUTENCAO)/.test(text)) return "corporativo";
   if (/(ESPECIALISTA|TECNICO|TECNICA|PROJETO)/.test(text)) return "especialista";
-  return "vendedor_externo";
+  return "especialista";
 }
 
 const CITY_REGION = new Map(Object.entries({
@@ -524,9 +524,12 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
     },
     importCustomerRegistry: async () => ({ error: "persistent_database_required" }),
     listCases: async (options = {}) => {
+      const phone = phoneDigitsForLookup(options.phone || "");
       const items = options.customerCode
         ? db.cases.filter((item) => item.contact.customer_code === options.customerCode)
-        : db.cases;
+        : phone
+          ? db.cases.filter((item) => phoneDigitsForLookup(item.contact.phone || "") === phone)
+          : db.cases;
       return { items, total: items.length };
     },
     listFunnels: async () => ({ items: memoryFunnels() }),
@@ -541,8 +544,10 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
     moveCaseStage: async (caseId, stageId) => {
       const found = db.cases.find((c) => c.id === caseId);
       if (!found) return { error: "case_not_found" };
-      const stage = memoryFunnels().flatMap((f) => f.stages).find((s) => s.id === stageId || s.name === stageId);
+      const funnel = memoryFunnels().find((f) => (f.stages || []).some((s) => s.id === stageId || s.name === stageId));
+      const stage = funnel && (funnel.stages || []).find((s) => s.id === stageId || s.name === stageId);
       if (!stage) return { error: "stage_not_found" };
+      found.fields.pipeline = funnel.name;
       found.fields.stage = stage.name;
       found.updated_at = new Date().toISOString();
       return { case: found };
@@ -823,19 +828,24 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       where sr.organization_id=$1
         and sr.active=true
         and sp.active=true
+        and u.status='active'
+        and sp.whatsapp_e164 is not null
+        and sp.whatsapp_e164 <> ''
         and sr.channel=$2
         and ($3::text is null or sr.sales_function=$3)
         and sr.route_type=$4
         and lower(sr.route_value)=lower($5)
-      order by case when $6::boolean and sr.sales_function='vendedor_externo' then 0 else 1 end,
+      order by case
+          when $6::boolean and sr.sales_function in ('corporativo','especialista','construcao_civil') then 0
+          when $6::boolean and sr.sales_function='vendedor_externo' then 2
+          else 1
+        end,
         sr.priority, u.display_name
       limit 1
     `, [ctx.org.id, channel, wantedSalesFunction, routeType, wantedRouteValue, anyFunction]);
     let row = await tryRoute(salesFunction, routeValue);
-    const segmentLocked = ["corporativo", "especialista"].includes(salesFunction);
-    if (!row && salesFunction !== "vendedor_externo" && !segmentLocked) row = await tryRoute("vendedor_externo", routeValue);
+    const segmentLocked = ["corporativo", "especialista", "construcao_civil"].includes(salesFunction);
     if (!row && channel === "varejo") row = await tryRoute(salesFunction, "CAMBUI");
-    if (!row && channel === "varejo" && !segmentLocked) row = await tryRoute("vendedor_externo", "CAMBUI");
     if (!row && channel === "varejo") row = await tryRoute(null, "CAMBUI", true);
     if (!row) return null;
     return { ...row, channel, salesFunction: row.sales_function || salesFunction, routeType: row.route_type || routeType, routeValue: row.route_value || routeValue };
@@ -843,17 +853,16 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
   async function ensureManualDestination(ctx, input) {
     const requested = normalizePhone(input.responsiblePhone || "");
     if (!requested.ok) {
+      if (String(input.requireRoutedDestination || "").toLowerCase() === "true" && !String(input.city || "").trim() && !String(input.ddd || "").trim()) {
+        return { error: "routing_city_required" };
+      }
       const routed = await findRoutedSeller(ctx, input);
       if (routed) {
         const departmentName = routed.channel === "atacado" ? "Atacado" : "Vendas";
         const department = await ensureDepartment(ctx.org.id, departmentName);
-        let account = ctx.sellerAccount;
-        let phone = ctx.sellerAccount.e164;
-        if (routed.whatsapp_e164) {
-          account = await ensureAccount(ctx.org.id, routed.whatsapp_e164, routed.seller_name, "employee");
-          await ensureBinding(ctx.org.id, routed.user_id, account.id);
-          phone = account.e164;
-        }
+        const account = await ensureAccount(ctx.org.id, routed.whatsapp_e164, routed.seller_name, "employee");
+        await ensureBinding(ctx.org.id, routed.user_id, account.id);
+        const phone = account.e164;
         await ensureUserDepartment(routed.user_id, department.id);
         return {
           user: { id: routed.user_id, name: routed.seller_name, role: "seller" },
@@ -871,6 +880,9 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
           },
           reason: `Roteamento ${routed.channel}: ${routed.salesFunction} / ${routed.routeType} ${routed.routeValue}`
         };
+      }
+      if (String(input.requireRoutedDestination || "").toLowerCase() === "true") {
+        return { error: "routing_destination_unavailable" };
       }
       return {
         user: ctx.sellerUser,
@@ -1182,6 +1194,7 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
     simulateRouting: async (body) => {
       const ctx = await ready();
       const routed = await ensureManualDestination(ctx, body);
+      if (routed.error) return routed;
       return { destination: { id: routed.user.id, name: routed.name, phone: routed.phone, department: routed.departmentName }, route: routed.route || null, reason: routed.reason };
     },
     listSellers: async () => {
@@ -1278,6 +1291,7 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       if (!saleValue.ok) return { error: "invalid_sale_value" };
       const contactName = String(body.name || "").trim() || null;
       const routed = await ensureManualDestination(ctx, body);
+      if (routed.error) return routed;
       const segment = await findSegment(ctx.org.id, body.segment);
       const pipeline = await defaultPipeline(ctx.org.id, body.pipeline);
       const stage = await defaultStage(pipeline?.id, body.stage);
@@ -1723,8 +1737,11 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
     },
     listCases: async (options = {}) => {
       const ctx = await ready();
+      const phone = phoneDigitsForLookup(options.phone || "");
       const rows = options.customerCode
         ? await many(`${caseSelect} where c.organization_id=$1 and co.customer_code=$2 order by c.updated_at desc limit 100`, [ctx.org.id, options.customerCode])
+        : phone
+          ? await many(`${caseSelect} where c.organization_id=$1 and regexp_replace(coalesce(ci.e164, ci.original, ''), '\\D', '', 'g') in ($2, $3) order by c.updated_at desc limit 100`, [ctx.org.id, phone, `55${phone}`])
         : await many(`${caseSelect} where c.organization_id=$1 order by c.created_at desc limit 100`, [ctx.org.id]);
       const items = rows.map(shapeCase);
       return { items, total: items.length };

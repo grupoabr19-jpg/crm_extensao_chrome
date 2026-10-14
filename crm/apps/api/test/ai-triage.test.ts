@@ -57,7 +57,8 @@ describe("AI triage backend guard", () => {
       segment: "Construtoras",
       department: "Vendas",
       pipeline: "VAREJO",
-      salesFunction: "construcao_civil"
+      salesFunction: "construcao_civil",
+      requireRoutedDestination: true
     });
   });
 
@@ -82,5 +83,10 @@ describe("AI triage backend guard", () => {
       .toMatchObject({ kind: "question", key: "ask_city_uf" });
     expect(guardTriageOutput(output({ recommended_action: "ask_question", suggested_question: "qualquer texto" }), messages).outbound)
       .toMatchObject({ kind: "neutral" });
+  });
+
+  it("asks only for the missing UF using the city already evidenced", () => {
+    const guard = guardTriageOutput(output({ recommended_action: "ask_question", suggested_question: "ask_uf_only" }), messages);
+    expect(guard.outbound).toMatchObject({ kind: "question", key: "ask_uf_only", text: "Jundiai fica em qual UF?" });
   });
 });

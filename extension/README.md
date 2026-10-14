@@ -11,7 +11,7 @@ Com o painel expandido em uma janela com pelo menos 1200 px de largura, a extens
 3. Clique em **Carregar sem compactação** e selecione esta pasta `extension`.
 4. Atualize a aba do WhatsApp Web.
 
-A API padrão é `https://abr-crm-api.onrender.com`. A conexão pode ser testada e configurada no botão de engrenagem da barra. Configurações antigas que apontavam para `localhost:10000` são migradas para o Render na primeira inicialização após atualizar a extensão.
+A API padrão é `https://grupoabr.agenciaverticale.com.br`, o domínio HTTPS do CRM. A conexão pode ser testada e configurada no botão de engrenagem da barra. Configurações antigas que apontavam para `localhost:10000`, para o IP da VM ou para o Render são migradas para o domínio na primeira inicialização após atualizar a extensão.
 
 Antes de carregar fichas ou usar qualquer função, entre com o e-mail corporativo (ou nome de usuário) e a senha do operador. O token é guardado no armazenamento privado da extensão e pode ser removido pelo botão **Encerrar sessão** em Configurações. O acesso também é validado pela API; abrir a página do CRM diretamente mostra o login, não os dados.
 

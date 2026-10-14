@@ -16,4 +16,8 @@ describe("CRM web page", () => {
       }
     }
   });
+
+  it("keeps administrative views stacked instead of forcing them into a flex row", () => {
+    expect(html).toContain(".admin.view.active{display:block}");
+  });
 });

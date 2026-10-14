@@ -5,7 +5,7 @@
 
   var STORE_KEY = 'abrCrmMvpConfig';
   var AUTH_KEY = 'abrCrmSession';
-  var DEFAULT_API = 'https://abr-crm-api.onrender.com';
+  var DEFAULT_API = 'https://grupoabr.agenciaverticale.com.br';
   var OPTION_FIELDS = [
     { key: 'sourceOptions', settingsId: 'cfgSourceOptions', defaultId: 'cfgDefaultSource', formId: 'source', values: ['Não informado', 'Instagram', 'Facebook', 'LinkedIn', 'Google', 'Feiras/Eventos'], fallback: 'Não informado' },
     { key: 'segmentOptions', settingsId: 'cfgSegmentOptions', defaultId: 'cfgDefaultSegment', formId: 'segment', values: ['Cliente Final', 'Construtoras', 'Deposito (Armadores)', 'Distribuidores', 'Industria de Transformacao', 'Revendedores', 'Revendas', 'Construcao Civil', 'Arquitetura', 'Pedreiro'], fallback: 'Construtoras' },
@@ -101,6 +101,29 @@
       say('Nao consegui copiar automaticamente; selecione o texto no painel.', 'warn');
     });
   }
+  function normalizePhoneDigits(raw) {
+    var digits = String(raw || '').replace(/\D/g, '');
+    if (!digits) return '';
+    if (digits.indexOf('55') === 0 && (digits.length === 12 || digits.length === 13)) return digits;
+    if (digits.length === 10 || digits.length === 11) return '55' + digits;
+    return digits.length >= 8 && digits.length <= 15 ? digits : '';
+  }
+  function currentChatIdentity() {
+    var scope = document.querySelector('#main') || document;
+    var ids = Array.prototype.slice.call(scope.querySelectorAll('[data-id]'))
+      .map(function (row) { return row.getAttribute('data-id') || ''; })
+      .filter(function (id) { return /@c\.us/.test(id); });
+    var phone = '';
+    for (var i = ids.length - 1; i >= 0 && !phone; i--) {
+      var match = ids[i].match(/_(\d{10,15})@c\.us/);
+      if (match) phone = normalizePhoneDigits(match[1]);
+    }
+    var header = scope.querySelector('header [title]') || scope.querySelector('header span[dir="auto"]');
+    return {
+      phone: phone ? '+' + phone : '',
+      name: header ? String(header.getAttribute('title') || header.textContent || '').trim() : ''
+    };
+  }
 
   function renderHandoffs(items) {
     $('railPendCount').textContent = String(items.length || 0);
@@ -150,13 +173,14 @@
   function setCaseForm(crmCase, customer) {
     var fields = crmCase && crmCase.fields || {};
     var customerProfile = customer && customer.profile || {};
+    var chat = !crmCase && !customer ? currentChatIdentity() : {};
     var defaults = {
       source: value('cfgDefaultSource'), segment: value('cfgDefaultSegment'),
       department: value('cfgDefaultDepartment'), potential: value('cfgDefaultPotential'),
       temperature: value('cfgDefaultTemperature')
     };
-    $('name').value = crmCase && crmCase.contact && crmCase.contact.name || customer && customer.name || '';
-    $('phone').value = crmCase && crmCase.contact && crmCase.contact.phone || customer && customer.phone || '';
+    $('name').value = crmCase && crmCase.contact && crmCase.contact.name || customer && customer.name || chat.name || '';
+    $('phone').value = crmCase && crmCase.contact && crmCase.contact.phone || customer && customer.phone || chat.phone || '';
     $('company').value = fields.company || customerProfile.company || '';
     $('city').value = fields.city || customer && customer.city || customerProfile.city || '';
     $('uf').value = fields.uf || customer && customer.uf || customerProfile.uf || '';
@@ -404,10 +428,18 @@
   }
   function loadCrmData(preferredCaseId) {
     var revision = authRevision;
+    var chatIdentity = currentChatIdentity();
+    var casesRequest = preferredCaseId
+      ? request('/v1/cases/' + encodeURIComponent(preferredCaseId)).then(function (data) {
+        return { items: data.case ? [data.case] : [], total: data.case ? 1 : 0 };
+      })
+      : request(chatIdentity.phone
+        ? '/v1/cases?phone=' + encodeURIComponent(chatIdentity.phone)
+        : '/v1/cases');
     if (!authToken) return Promise.reject(new Error('unauthorized'));
     return Promise.all([
       request('/v1/funnels'),
-      request('/v1/cases'),
+      casesRequest,
       request('/v1/customers').catch(function (err) {
         return { items: [], total: 0, error: err.message };
       })
@@ -421,9 +453,23 @@
           ? 'Cadastro disponível: ' + results[2].total + ' clientes. Digite ao menos 2 caracteres para buscar.'
           : 'Nenhum cliente cadastrado ainda. A busca encontra clientes já carregados na base do CRM.';
       if (preferredCaseId && crmCases.some(function (item) { return item.id === preferredCaseId; })) activeCaseId = preferredCaseId;
-      else if (!crmCases.some(function (item) { return item.id === activeCaseId; })) activeCaseId = '';
+      else if (!crmCases.some(function (item) { return item.id === activeCaseId; })) {
+        var chatPhoneDigits = normalizePhoneDigits(chatIdentity.phone);
+        var phoneMatch = chatPhoneDigits && crmCases.find(function (item) {
+          return normalizePhoneDigits(item.contact && item.contact.phone || '') === chatPhoneDigits;
+        });
+        activeCaseId = phoneMatch ? phoneMatch.id : '';
+      }
       var selectedCase = crmCases.find(function (item) { return item.id === activeCaseId; });
-      if (!selectedCase && !activeCustomer) $('customerSearch').value = '';
+      if (selectedCase) {
+        setCaseForm(selectedCase);
+      } else if (chatIdentity.phone || chatIdentity.name) {
+        activeCustomer = null;
+        $('customerSearch').value = '';
+        setCaseForm(null);
+      } else if (!activeCustomer) {
+        $('customerSearch').value = '';
+      }
       var selectedFunnel = funnelForCase(selectedCase);
       activePipelineId = selectedFunnel ? selectedFunnel.id : (crmFunnels[0] && crmFunnels[0].id) || '';
       renderCaseOptions();
@@ -446,7 +492,6 @@
     }
     var stageSelect = $('activeStage');
     stageSelect.disabled = true;
-    $('activeCase').disabled = true;
     say('Movendo ficha no Kanban...');
     request('/v1/cases/' + encodeURIComponent(current.id) + '/stage', {
       method: 'POST',
@@ -464,7 +509,6 @@
       renderPipelineTracker();
       say('Não foi possível mover a ficha: ' + err.message, 'err');
     }).finally(function () {
-      $('activeCase').disabled = false;
       renderPipelineTracker();
     });
   }
@@ -840,7 +884,12 @@
 
   load(function (cfg) {
     var configuredApi = cfg.api || '';
-    if (configuredApi === 'http://127.0.0.1:10000' || configuredApi === 'http://localhost:10000') {
+    if (
+      configuredApi === 'http://127.0.0.1:10000' ||
+      configuredApi === 'http://localhost:10000' ||
+      configuredApi === 'http://164.152.38.135:10000' ||
+      configuredApi === 'https://abr-crm-api.onrender.com'
+    ) {
       configuredApi = DEFAULT_API;
       cfg.api = DEFAULT_API;
       save(cfg);

@@ -13,18 +13,26 @@ const config = {
   mode: envChoice("WHATSAPP_BOT_MODE", ["dry-run", "supervised", "auto"], "supervised"),
   headless: envBool("WHATSAPP_BOT_HEADLESS", false),
   hideWindow: envBool("WHATSAPP_BOT_HIDE_WINDOW", false),
-  apiBase: stripSlash(process.env.WHATSAPP_BOT_API_BASE_URL || process.env.ABR_API_BASE_URL || process.env.API_BASE_URL || "https://abr-crm-api.onrender.com"),
+  chromeExecutable: process.env.WHATSAPP_BOT_CHROME_EXECUTABLE || "",
+  userAgent: process.env.WHATSAPP_BOT_USER_AGENT || "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.8078.4 Safari/537.36",
+  apiBase: stripSlash(process.env.WHATSAPP_BOT_API_BASE_URL || process.env.ABR_API_BASE_URL || process.env.API_BASE_URL || "https://grupoabr.agenciaverticale.com.br"),
   email: process.env.WHATSAPP_BOT_CRM_EMAIL || process.env.WHATSAPP_BOT_ALLOWED_EMAIL || "thiago.almeida@grupoabr.com.br",
   password: process.env.WHATSAPP_BOT_CRM_PASSWORD || "",
   pollMs: envInt("WHATSAPP_BOT_POLL_MS", 5000),
+  navTimeoutMs: envInt("WHATSAPP_BOT_NAV_TIMEOUT_MS", 90000),
   commitReady: envBool("WHATSAPP_BOT_COMMIT_READY", false),
   activeChatOnly: envBool("WHATSAPP_BOT_ACTIVE_CHAT_ONLY", true),
+  keepUnreadFilter: envBool("WHATSAPP_BOT_KEEP_UNREAD_FILTER", true),
+  allowedContactPhones: envList("WHATSAPP_BOT_ALLOWED_CONTACT_PHONES").map(normalizeAllowedPhoneDigits).filter(Boolean),
+  contactPhoneAliases: envMap("WHATSAPP_BOT_CONTACT_PHONE_ALIASES"),
   botName: process.env.WHATSAPP_BOT_NAME || "Abraão",
   pietraName: process.env.WHATSAPP_BOT_PIETRA_NAME || "Pietra",
   pietraPhone: process.env.WHATSAPP_BOT_PIETRA_PHONE || "+5535998138542",
   trainingFile: process.env.WHATSAPP_BOT_TRAINING_FILE || resolve(__dirname, "../training/abr-bot-training.json"),
   profileDir: process.env.WHATSAPP_BOT_PROFILE_DIR || resolve(crmRoot, ".local/whatsapp-bot-profile"),
   stateFile: process.env.WHATSAPP_BOT_STATE_FILE || resolve(crmRoot, ".local/whatsapp-bot-state.json"),
+  qrScreenshotFile: process.env.WHATSAPP_BOT_QR_SCREENSHOT_FILE || resolve(crmRoot, ".local/whatsapp-bot-qr.png"),
+  qrScreenshotMs: envInt("WHATSAPP_BOT_QR_SCREENSHOT_MS", 5000),
   maxChatsPerTick: envInt("WHATSAPP_BOT_MAX_CHATS_PER_TICK", 1),
   respondExistingUnread: envBool("WHATSAPP_BOT_RESPOND_EXISTING_UNREAD", false),
   scanRecentForCommands: envBool("WHATSAPP_BOT_SCAN_RECENT_FOR_COMMANDS", false),
@@ -36,6 +44,7 @@ const config = {
 const state = loadState(config.stateFile);
 const seen = new Map(Object.entries(state.seen || {}));
 const cooldowns = new Map();
+const ignoredCandidates = new Map();
 const awaitingCustomer = new Map(Object.entries(state.awaitingCustomer || {}));
 const handledTransfers = new Map(Object.entries(state.handledTransfers || {}));
 const training = loadTraining(config.trainingFile);
@@ -58,8 +67,10 @@ async function main() {
   log(`${config.botName} autenticado no CRM como ${config.email}. Modo: ${config.mode}. API: ${config.apiBase}`);
 
   const context = await chromium.launchPersistentContext(config.profileDir, {
+    ...(config.chromeExecutable ? { executablePath: config.chromeExecutable } : {}),
     headless: config.headless,
     viewport: { width: 1366, height: 900 },
+    userAgent: config.userAgent,
     args: [
       "--disable-notifications",
       ...(config.hideWindow ? ["--start-minimized", "--window-position=-32000,-32000", "--window-size=1366,900"] : [])
@@ -67,7 +78,8 @@ async function main() {
   });
   const page = context.pages()[0] || await context.newPage();
   page.setDefaultTimeout(10000);
-  await page.goto("https://web.whatsapp.com/", { waitUntil: "domcontentloaded" });
+  page.setDefaultNavigationTimeout(config.navTimeoutMs);
+  await page.goto("https://web.whatsapp.com/", { waitUntil: "domcontentloaded", timeout: config.navTimeoutMs });
   await waitForWhatsAppReady(page);
   log(config.activeChatOnly
     ? "WhatsApp Web pronto. Abra uma conversa no Chromium do bot; vou monitorar o chat aberto."
@@ -105,11 +117,15 @@ async function tick(page) {
     const fingerprint = incomingFingerprint(snapshot);
     if (isAwaitingCustomer(key, snapshot, fingerprint)) return;
     if (seen.get(key) === fingerprint) return;
-    seen.set(key, fingerprint);
-    await handleConversation(page, snapshot);
+    const didHandle = await handleConversation(page, snapshot);
+    if (didHandle) {
+      seen.set(key, fingerprint);
+      persistState();
+    }
     return;
   }
 
+  if (config.keepUnreadFilter) await ensureUnreadFilter(page);
   const chats = await findUnreadChats(page);
   if (chats.length) {
     log(`Chats nao lidos encontrados: ${chats.length}; candidatos=${chats.slice(0, 5).map((chat) => `${chat.index}:${chat.title || "sem titulo"}`).join(" | ")}`);
@@ -121,6 +137,7 @@ async function tick(page) {
     let handled = 0;
     for (const chat of chats) {
       if (handled >= config.maxChatsPerTick) break;
+      if (shouldSkipChatCandidate(chat)) continue;
       const snapshot = await openAndReadChat(page, chat);
       if (!snapshot) continue;
       const key = chatKey(snapshot);
@@ -128,10 +145,12 @@ async function tick(page) {
       const fingerprint = incomingFingerprint(snapshot);
       if (isAwaitingCustomer(key, snapshot, fingerprint)) continue;
       if (seen.get(key) === fingerprint) continue;
-      seen.set(key, fingerprint);
-      persistState();
       const didHandle = await handleConversation(page, snapshot);
-      if (didHandle) handled += 1;
+      if (didHandle) {
+        seen.set(key, fingerprint);
+        persistState();
+        handled += 1;
+      }
     }
   }
   bootstrappedUnread = true;
@@ -144,6 +163,7 @@ async function tick(page) {
 async function bootstrapUnreadChats(page, chats) {
   log("Primeiro ciclo: registrando conversas antigas sem responder automaticamente.");
   for (const chat of chats.slice(0, config.maxChatsPerTick)) {
+    if (shouldSkipChatCandidate(chat)) continue;
     const snapshot = await openAndReadChat(page, chat);
     if (!snapshot) continue;
     const key = chatKey(snapshot);
@@ -166,6 +186,10 @@ async function handleConversation(page, snapshot) {
   const customerPhone = customerPhoneFromSnapshot(snapshot);
   if (!customerPhone) {
     log(`Ignorando sem telefone confiavel: ${snapshot.chatTitle || "sem titulo"} (${incoming.length} msg recebidas)`);
+    return false;
+  }
+  if (!isAllowedContactPhone(customerPhone)) {
+    log(`Ignorando contato fora da lista permitida: ${snapshot.chatTitle || "sem titulo"} (${customerPhone})`);
     return false;
   }
   log(`Triando: ${snapshot.chatTitle} (${customerPhone}; ${incoming.length} msg recebidas)`);
@@ -224,7 +248,6 @@ async function transferContact(page, snapshot, customerPhone, target) {
     log(`Transferencia ja processada para este comando: ${snapshot.chatTitle}`);
     return;
   }
-  markHandledTransfer(snapshot, customerPhone);
   log(`Comando detectado: transferir para ${target.name}. Criando ficha e handoff...`);
   let casePayload = {};
   try {
@@ -248,6 +271,20 @@ async function transferContact(page, snapshot, customerPhone, target) {
     markAwaitingCustomer(snapshot);
     return;
   }
+
+  const city = String(casePayload.city || "").trim();
+  const uf = String(casePayload.uf || "").trim();
+  if (!city || !uf) {
+    const question = city && !uf
+      ? `${city} fica em qual UF?`
+      : "Em qual cidade e UF voce precisa do atendimento?";
+    await maybeSend(page, question, "localizacao necessaria para transferencia");
+    markCooldown(snapshot);
+    markAwaitingCustomer(snapshot);
+    return;
+  }
+
+  markHandledTransfer(snapshot, customerPhone);
 
   const created = await postJson("/v1/cases", {
     ...casePayload,
@@ -302,6 +339,10 @@ async function scanRecentTransferCommands(page) {
     const transferTarget = await transferTargetFromMessages(snapshot.messages);
     if (!transferTarget) continue;
     const customerPhone = customerPhoneFromSnapshot(snapshot);
+    if (customerPhone && !isAllowedContactPhone(customerPhone)) {
+      log(`Comando ignorado fora da lista permitida: ${snapshot.chatTitle || "sem titulo"} (${customerPhone})`);
+      continue;
+    }
     if (isHandledTransfer(snapshot, customerPhone)) continue;
     if (!customerPhone) {
       log(`Comando para ${transferTarget.name} ignorado sem telefone confiavel: ${snapshot.chatTitle || "sem titulo"}`);
@@ -348,10 +389,63 @@ async function sendToPhone(page, phone, text, reason) {
 
 async function waitForWhatsAppReady(page) {
   log("Aguardando WhatsApp Web. Se aparecer QR Code, escaneie com o numero principal.");
+  if (config.headless) {
+    await keepQrScreenshotFresh(page);
+    return;
+  }
   await page.waitForFunction(() => {
     return Boolean(document.querySelector("#pane-side") || document.querySelector("canvas[aria-label*='Scan']") || document.body?.innerText?.includes("Use WhatsApp on your computer"));
   }, null, { timeout: 120000 });
   await page.waitForFunction(() => Boolean(document.querySelector("#pane-side")), null, { timeout: 0 });
+}
+
+async function keepQrScreenshotFresh(page) {
+  mkdirSync(dirname(config.qrScreenshotFile), { recursive: true });
+  let lastLogged = 0;
+  while (!await hasPaneSide(page)) {
+    let saved = false;
+    try {
+      await page.screenshot({ path: config.qrScreenshotFile, fullPage: false, timeout: 60000 });
+      saved = true;
+    } catch (error) {
+      log(`Nao consegui salvar screenshot de login: ${describeError(error)}`);
+    }
+    const now = Date.now();
+    if (saved && now - lastLogged > 30000) {
+      log(`Tela de login/espera salva em ${config.qrScreenshotFile}. Se houver QR Code, escaneie e aguarde a sessao carregar.`);
+      lastLogged = now;
+    }
+    await page.waitForTimeout(config.qrScreenshotMs);
+  }
+}
+
+async function hasPaneSide(page) {
+  return page.evaluate(() => Boolean(document.querySelector("#pane-side"))).catch(() => false);
+}
+
+async function ensureUnreadFilter(page) {
+  const clicked = await page.evaluate(() => {
+    const normalize = (value) => String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+    const candidates = Array.from(document.querySelectorAll("button,[role='button'],[role='tab']"));
+    const unread = candidates.find((node) => {
+      const text = normalize(node.textContent || node.getAttribute("aria-label") || "");
+      if (!/\b(unread|nao lidas?|nao lidos?)\b/.test(text)) return false;
+      const rect = node.getBoundingClientRect();
+      return rect.width > 20 && rect.height > 15;
+    });
+    if (!unread) return false;
+    const selected = unread.getAttribute("aria-selected") === "true"
+      || unread.getAttribute("aria-pressed") === "true"
+      || /\b(selected|active)\b/i.test(String(unread.className || ""));
+    if (!selected) unread.click();
+    return true;
+  }).catch(() => false);
+  if (clicked) await page.waitForTimeout(300);
 }
 
 async function findUnreadChats(page) {
@@ -536,11 +630,18 @@ async function transferTargetFromMessages(messages) {
   const command = latestTransferCommand(messages);
   if (!command) return null;
   const targets = await getTransferTargets();
-  const target = matchTransferTarget(command, targets);
+  const target = matchTransferTarget(command, targets) || (isGenericHumanRequest(normalizeTextLocal(command)) ? defaultTransferTarget(targets) : null);
   if (!target) {
     log(`Comando de transferencia sem operador com telefone cadastrado: ${command.slice(0, 180)}`);
   }
   return target;
+}
+
+function defaultTransferTarget(targets) {
+  const configuredPhone = normalizePhoneDigits(config.pietraPhone);
+  return targets.find((target) => configuredPhone && normalizePhoneDigits(target.phone) === configuredPhone)
+    || targets.find((target) => normalizeTextLocal(target.name) === normalizeTextLocal(config.pietraName))
+    || null;
 }
 
 function matchTransferTarget(command, targets) {
@@ -667,6 +768,29 @@ function envChoice(key, choices, fallback) {
   return choices.includes(value) ? value : fallback;
 }
 
+function envList(key) {
+  return String(process.env[key] || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function envMap(key) {
+  const pairs = String(process.env[key] || "")
+    .split(/[;\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const map = new Map();
+  for (const pair of pairs) {
+    const separator = pair.indexOf("=");
+    if (separator <= 0) continue;
+    const alias = normalizeAliasKey(pair.slice(0, separator));
+    const phone = normalizeAllowedPhoneDigits(pair.slice(separator + 1));
+    if (alias && phone) map.set(alias, phone);
+  }
+  return map;
+}
+
 function stripSlash(value) {
   return String(value || "").replace(/\/+$/, "");
 }
@@ -678,7 +802,36 @@ function phoneFromTitle(title) {
 }
 
 function customerPhoneFromSnapshot(snapshot) {
-  return snapshot.chatPhone || phoneFromTitle(snapshot.chatTitle);
+  return snapshot.chatPhone || phoneFromTitle(snapshot.chatTitle) || phoneFromAlias(snapshot.chatTitle);
+}
+
+function isAllowedContactPhone(phone) {
+  if (!config.allowedContactPhones.length) return true;
+  const digits = normalizeAllowedPhoneDigits(phone);
+  return Boolean(digits && config.allowedContactPhones.includes(digits));
+}
+
+function phoneFromAlias(title) {
+  const key = normalizeAliasKey(title);
+  if (!key) return "";
+  const phone = config.contactPhoneAliases.get(key);
+  return phone ? `+${phone}` : "";
+}
+
+function phoneFromChatCandidate(chat) {
+  return phoneFromTitle(chat?.title) || phoneFromAlias(chat?.title);
+}
+
+function shouldSkipChatCandidate(chat) {
+  const phone = phoneFromChatCandidate(chat);
+  if (!phone || isAllowedContactPhone(phone)) return false;
+  const key = `${chat?.title || "sem titulo"}:${phone}`;
+  const now = Date.now();
+  if ((ignoredCandidates.get(key) || 0) < now) {
+    log(`Ignorando candidato fora da lista permitida sem abrir: ${chat?.title || "sem titulo"} (${phone})`);
+    ignoredCandidates.set(key, now + 5 * 60 * 1000);
+  }
+  return true;
 }
 
 function withChatCandidate(snapshot, chat) {
@@ -689,7 +842,7 @@ function withChatCandidate(snapshot, chat) {
   return {
     ...snapshot,
     chatTitle: currentTitle && !genericTitle ? currentTitle : candidateTitle,
-    chatPhone: snapshot.chatPhone || phoneFromTitle(candidateTitle)
+    chatPhone: snapshot.chatPhone || phoneFromTitle(candidateTitle) || phoneFromAlias(candidateTitle)
   };
 }
 
@@ -790,7 +943,17 @@ function latestTransferCommand(messages) {
 }
 
 function isTransferText(text) {
-  return /TRANSFERIR|TRANSFERE|PASSA|PASSAR|ENCAMINH/.test(text);
+  return /TRANSFERIR|TRANSFERE|PASSA|PASSAR|ENCAMINH/.test(text) || isGenericHumanRequest(text);
+}
+
+function isGenericHumanRequest(text) {
+  const normalized = normalizeTextLocal(text);
+  const person = /\b(VENDEDOR(?:A)?|ATENDENTE|HUMANO|PESSOA|ALGUEM|EQUIPE COMERCIAL)\b/;
+  const request = /\b(QUERO|PRECISO|GOSTARIA|FALAR|CHAMA|CHAMAR|MANDA|MANDAR|PASSA|PASSAR|TRANSFER|ENCAMINH|ATENDIMENTO)\b/;
+  if (!person.test(normalized) || !request.test(normalized)) return false;
+  const namedDestination = normalized.match(/\b(?:PARA|PRA|PRO)\s+(?:(?:O|A|UM|UMA)\s+)?([A-Z0-9]+)/);
+  if (!namedDestination) return true;
+  return /^(VENDEDOR|VENDEDORA|ATENDENTE|HUMANO|PESSOA|ALGUEM|EQUIPE)$/.test(namedDestination[1]);
 }
 
 function qualificationSummary(messages) {
@@ -818,6 +981,18 @@ function normalizePhoneDigits(value) {
   return String(value || "").replace(/\D/g, "");
 }
 
+function normalizeAliasKey(value) {
+  return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function normalizeAllowedPhoneDigits(value) {
+  const digits = normalizePhoneDigits(value);
+  if (!digits) return "";
+  if (digits.startsWith("55")) return digits;
+  if (digits.length === 10 || digits.length === 11) return `55${digits}`;
+  return digits;
+}
+
 function sleep(ms) {
   return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 }
@@ -826,6 +1001,8 @@ function describeError(error) {
   const parts = [];
   if (error.status) parts.push(`status=${error.status}`);
   parts.push(error.message || String(error));
+  if (error.cause?.code) parts.push(`cause=${error.cause.code}`);
+  if (error.cause?.message) parts.push(`causeMessage=${error.cause.message}`);
   if (error.data && typeof error.data === "object") {
     const safe = {
       error: error.data.error,

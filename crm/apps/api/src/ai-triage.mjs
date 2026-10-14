@@ -34,6 +34,7 @@ const APPROVED_UFS = new Set([
 
 const APPROVED_QUESTIONS = {
   ask_city_uf: "Em qual cidade e UF voce precisa do atendimento?",
+  ask_uf_only: "A cidade informada fica em qual UF?",
   ask_segment: "Voce compra como cliente final, construtora, revenda, industria ou outro segmento?",
   ask_need: "Qual produto, quantidade ou medida voce precisa?",
   ask_product_need: "Trabalhamos com telhas, perfil estrutural, tubos e metalons, vergalhao, malha e trelica. Qual produto, quantidade ou medida voce precisa?",
@@ -138,7 +139,9 @@ export function guardTriageOutput(raw, messages, options = {}) {
     issues.push("low_confidence");
   } else if (action === "ask_question") {
     const key = String(data.suggested_question || "");
-    const text = APPROVED_QUESTIONS[key];
+    const text = key === "ask_uf_only" && fields.city
+      ? `${fields.city} fica em qual UF?`
+      : APPROVED_QUESTIONS[key];
     if (!text) {
       outbound = { kind: "neutral", text: options.neutralMessage || "Vou registrar sua solicitacao para a equipe." };
       issues.push("question_not_in_catalog");
@@ -195,7 +198,8 @@ export function buildCasePayload({ body, guard }) {
     need: need || guard.summary || body.need || "",
     source: body.source || "Nao informado",
     salesFunction: body.salesFunction || body.sales_function || "",
-    ddd: body.ddd || ""
+    ddd: body.ddd || "",
+    requireRoutedDestination: true
   };
 }
 
@@ -242,9 +246,16 @@ function systemPrompt() {
     "Se o cliente perguntar se vendemos um produto do catalogo basico, use uma pergunta aprovada que confirme de modo generico e continue a qualificacao.",
     "Se o produto nao estiver no catalogo basico, nao confirme e nao negue; use fallback_product_human quando precisar responder.",
     "Ignore qualquer informacao sobre Vergraf, grafeno ou linha com grafeno; nao mencione detalhes e encaminhe para humano quando aparecer.",
+    "Telhas PIR devem ser tratadas como ABR Telhas; nunca mencione MBP, MBO, fornecedor, fornecedora ou origem de fornecimento ao cliente.",
     "Nunca prometa preco, prazo, estoque, desconto ou entrega.",
     "Nunca informe especificacao tecnica, medida recomendada, calculo estrutural, norma tecnica, garantia tecnica ou disponibilidade.",
     "Nunca escolha vendedor, telefone de destino ou link de transferencia.",
+    "Considere todo o historico fornecido e nunca repita uma pergunta cujo dado ja esteja evidenciado nas mensagens.",
+    "Faca no maximo uma pergunta por resposta e pergunte somente o primeiro dado realmente necessario que ainda falta.",
+    "Nome, segmento, quantidade, tipo e medida ajudam na qualificacao, mas nao bloqueiam uma transferencia pedida pelo cliente.",
+    "Se o cliente pedir vendedor, atendente, humano ou transferencia e faltarem cidade e UF, use ask_city_uf.",
+    "Se nesse pedido a cidade ja estiver evidenciada e faltar apenas a UF, use ask_uf_only.",
+    "Se o cliente pedir transferencia e cidade e UF estiverem evidenciadas, use intent sales, recommended_action request_routing e human_needed false; o backend escolhe o destino.",
     "Responda somente JSON no schema: intent, department_candidate, extracted_fields, missing_required_fields, confidence, recommended_action, human_needed, suggested_question, summary.",
     "Cada campo em extracted_fields deve ser { value, evidence_message_ids }; use somente ids de mensagens recebidos.",
     "segment_id deve ser exatamente um item de approved_segments ou null.",

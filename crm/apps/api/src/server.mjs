@@ -398,7 +398,10 @@ async function handler(req, res) {
         if (triage.humanNeeded || triage.action !== "request_routing") return send(res, 409, { ...response, error: "triage_not_ready_for_routing" });
         await storage.ready();
         const created = await storage.createCase(payload);
-        if (created.error) return send(res, created.error === "invalid_phone" || created.error === "invalid_sale_value" ? 422 : 400, { ...response, ...created });
+        if (created.error) {
+          const unprocessable = ["invalid_phone", "invalid_sale_value", "routing_city_required", "routing_destination_unavailable"].includes(created.error);
+          return send(res, unprocessable ? 422 : 400, { ...response, ...created });
+        }
         const queued = await storage.queueHandoffMessage(created.case.id);
         return send(res, 201, { ...response, ...created, outbox: queued.command || queued });
       }
@@ -442,7 +445,9 @@ async function handler(req, res) {
     if (req.method === "POST" && url.pathname === "/v1/routing/simulate") {
       const body = await readBody(req);
       await storage.ready();
-      return send(res, 200, await storage.simulateRouting(body));
+      const result = await storage.simulateRouting(body);
+      if (result.error === "routing_city_required" || result.error === "routing_destination_unavailable") return send(res, 422, result);
+      return send(res, 200, result);
     }
 
     if (req.method === "GET" && url.pathname === "/v1/sellers") {
@@ -475,6 +480,8 @@ async function handler(req, res) {
       if (result.error === "invalid_phone") return send(res, 422, result);
       if (result.error === "invalid_sale_value") return send(res, 422, result);
       if (result.error === "customer_not_found") return send(res, 404, result);
+      if (result.error === "routing_city_required") return send(res, 422, result);
+      if (result.error === "routing_destination_unavailable") return send(res, 422, result);
       return send(res, 201, result);
     }
 
@@ -502,7 +509,8 @@ async function handler(req, res) {
     if (req.method === "GET" && url.pathname === "/v1/cases") {
       await storage.ready();
       return send(res, 200, await storage.listCases({
-        customerCode: url.searchParams.get("customer_code")
+        customerCode: url.searchParams.get("customer_code"),
+        phone: url.searchParams.get("phone")
       }));
     }
 
