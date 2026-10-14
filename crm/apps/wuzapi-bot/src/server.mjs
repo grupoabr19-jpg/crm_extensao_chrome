@@ -242,8 +242,11 @@ function extractName(raw, commaParts, city, product) {
     if (extracted && !STOP_WORDS.has(first) && !canonicalCity(extracted)) return titleCase(extracted);
   }
   if (commaParts.length >= 2 && /^[A-Za-zÀ-ÿ]{2,}(?:\s+[A-Za-zÀ-ÿ]{2,}){0,2}$/.test(commaParts[0])) {
-    return titleCase(commaParts[0]);
+    const extracted = commaParts[0].trim();
+    const first = words(extracted)[0] || '';
+    if (!STOP_WORDS.has(first) && !extractProduct(extracted) && !canonicalCity(extracted)) return titleCase(extracted);
   }
+  if (wantsPortfolio(raw)) return '';
   const blocked = new Set([...words(city), ...words(product), ...PRODUCT_ALIASES.flatMap((item) => item.aliases.flatMap((alias) => words(alias)))]);
   const candidate = words(raw).find((word) => word.length >= 3 && !STOP_WORDS.has(word) && !blocked.has(word) && !canonicalCity(word));
   return candidate ? titleCase(candidate) : '';
@@ -351,9 +354,9 @@ function wantsHumanSmart(text) {
   if (/\b(quero|preciso|gostaria|falar|atendimento)\b/i.test(normalized)
     && /\b(vendedor|vendedora|atendente|humano|pessoa|alguem|equipe comercial)\b/i.test(normalized)) return true;
   const textWords = words(text);
-  if (textWords.some((word) => ['trasfere', 'tranferir', 'encaminha'].some((alias) => closeEnough(word, alias)))) return true;
+  if (textWords.some((word) => ['trasfere', 'tranferir', 'encaminha'].includes(word))) return true;
   const hasRequest = textWords.some((word) => ['quero', 'preciso', 'gostaria', 'falar', 'atendimento'].includes(word));
-  return hasRequest && textWords.some((word) => ['vendedo', 'vendendor', 'atendete'].some((alias) => closeEnough(word, alias)));
+  return hasRequest && textWords.some((word) => ['vendedo', 'vendendor', 'atendete'].includes(word));
 }
 
 function isReadyForHandoff(conversation, text) {
@@ -598,13 +601,38 @@ async function transferToSeller(phone, conversation) {
     throw new Error(`routing_destination_unavailable: ${sellerName}`);
   }
 
-  await sendWhatsAppText(phone, `#ParceirACO obrigado pelo contato, em breve o vendedor ${sellerName} ira atende-lo.${protocol ? ` Protocolo ${protocol}.` : ''}`);
-  if (message) await sendWhatsAppText(normalizedDestination, message);
+  // The CRM record already exists at this point. Lock the conversation before
+  // any network send so a retry cannot create another case/protocol.
   conversation.handoffAt = Date.now();
   conversation.pendingHandoff = false;
   conversation.transferTarget = null;
   conversations.set(phone, conversation);
+
+  if (message) {
+    const sellerRecipient = await resolveWhatsAppRecipient(normalizedDestination);
+    await sendWhatsAppText(sellerRecipient, message);
+  }
+  await sendWhatsAppText(phone, `#ParceirACO obrigado pelo contato, em breve o vendedor ${sellerName} ira atende-lo.${protocol ? ` Protocolo ${protocol}.` : ''}`);
   return { sellerName, protocol, destinationPhone: Boolean(destinationPhone) };
+}
+
+async function resolveWhatsAppRecipient(phone) {
+  const normalized = normalizePhone(phone);
+  const response = await fetch(`${wuzapiBaseUrl}/user/check`, {
+    method: 'POST',
+    headers: {
+      Token: wuzapiToken,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ Phone: [normalized] })
+  });
+  const payload = await response.json().catch(() => ({}));
+  const user = payload?.data?.Users?.find((item) => normalizePhone(item?.Query) === normalized)
+    || payload?.data?.Users?.[0];
+  if (!response.ok || payload?.success === false || !user?.IsInWhatsapp || !user?.JID) {
+    throw new Error(`whatsapp_destination_unavailable: ${normalized}`);
+  }
+  return user.JID;
 }
 
 async function sendWhatsAppText(phone, body) {
@@ -675,6 +703,14 @@ async function handleWebhook(req, res) {
     return;
   }
 
+  if (wantsPortfolio(text) && !wantsHumanSmart(text)) {
+    await sendWhatsAppText(phone, PORTFOLIO_REPLY);
+    console.log(JSON.stringify({ event: 'portfolio_replied', phone, id }));
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+
   if (isReadyForHandoff(conversation, text)) {
     try {
       const result = await transferToSeller(phone, conversation);
@@ -694,7 +730,9 @@ async function handleWebhook(req, res) {
           ? 'Em qual cidade e UF voce precisa do atendimento?'
           : destinationIssue
             ? 'Nao consegui concluir a transferencia agora. Vou acionar a equipe comercial para continuar seu atendimento.'
-          : 'Ja tenho os dados principais e tentei encaminhar para o vendedor, mas tive uma falha momentanea no sistema. Vou registrar para seguirmos com o atendimento.'
+          : conversation.handoffAt
+            ? 'Sua solicitacao foi registrada, mas nao consegui avisar o vendedor pelo WhatsApp agora. A equipe comercial vai continuar o atendimento sem gerar um novo protocolo.'
+            : 'Tive uma falha momentanea antes de registrar a transferencia. Vou acionar a equipe comercial para continuar seu atendimento.'
       );
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: true, handoff: false, error: 'handoff_error' }));

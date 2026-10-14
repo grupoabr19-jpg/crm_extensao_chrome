@@ -26,6 +26,14 @@ describe("WuzAPI bot conversation logic", () => {
     "quero informações do seu portifolio"
   ])("recognizes portfolio request: %s", (message) => {
     expect(bot.wantsPortfolio(message)).toBe(true);
+    expect(bot.wantsHumanSmart(message)).toBe(false);
+  });
+
+  it("does not mistake a portfolio sentence for a customer name or transfer command", () => {
+    const message = "quero comprar aço, me fale sobre seu portfolio de produtos";
+    expect(bot.extractFactsSmart(message)).toMatchObject({ name: "", product: "Aco" });
+    expect(bot.wantsPortfolio(message)).toBe(true);
+    expect(bot.wantsHumanSmart(message)).toBe(false);
   });
 
   it("only transfers after an explicit request and requires city, not a specific product", () => {
