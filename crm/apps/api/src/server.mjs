@@ -500,10 +500,20 @@ async function handler(req, res) {
       if (result.error === "invalid_phone" || result.error === "invalid_sale_value") return send(res, 422, result);
       return send(res, 200, result);
     }
+    if (req.method === "DELETE" && updateCase) {
+      const result = await storage.deleteCase(decodeURIComponent(updateCase[1]));
+      if (result.error === "case_not_found") return send(res, 404, result);
+      return send(res, 200, result);
+    }
 
     if (req.method === "GET" && url.pathname === "/v1/customers") {
       await storage.ready();
       return send(res, 200, await storage.searchCustomers(url.searchParams.get("q")));
+    }
+
+    if (req.method === "GET" && url.pathname === "/v1/customers/table") {
+      await storage.ready();
+      return send(res, 200, await storage.listCustomers());
     }
 
     if (req.method === "GET" && url.pathname === "/v1/cases") {
@@ -517,6 +527,11 @@ async function handler(req, res) {
     if (req.method === "GET" && url.pathname === "/v1/reports/kpis") {
       await storage.ready();
       return send(res, 200, await storage.kpis(url.searchParams.get("pipeline_id")));
+    }
+
+    if (req.method === "GET" && url.pathname === "/v1/reports/sales") {
+      await storage.ready();
+      return send(res, 200, await storage.listSales());
     }
 
     if (req.method === "GET" && url.pathname === "/v1/reports/cases.csv") {
@@ -542,6 +557,7 @@ async function handler(req, res) {
       await storage.ready();
       const result = await storage.moveCaseStage(move[1], body.stageId);
       if (result.error === "case_not_found" || result.error === "stage_not_found") return send(res, 404, result);
+      if (["won_sale_value_required", "won_order_number_required", "reactivation_stage_not_found"].includes(result.error)) return send(res, 422, result);
       return send(res, 200, result);
     }
 
@@ -662,6 +678,7 @@ async function handler(req, res) {
       await storage.ready();
       const result = await storage.closeCase(closeCase[1], body);
       if (result.error === "case_not_found") return send(res, 404, result);
+      if (["invalid_sale_value", "won_sale_value_required", "won_order_number_required", "stage_not_found", "reactivation_stage_not_found"].includes(result.error)) return send(res, 422, result);
       return send(res, 200, result);
     }
 

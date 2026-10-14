@@ -77,6 +77,9 @@ try {
   await applyMigration("0012_ensure_supervisors", async () => {
     await client.query(readFileSync(resolve(migrationsDir, "0012_ensure_supervisors.sql"), "utf8"));
   });
+  await applyMigration("0013_sales_workflow", async () => {
+    await client.query(readFileSync(resolve(migrationsDir, "0013_sales_workflow.sql"), "utf8"));
+  });
   await client.query("commit");
   console.log("Migrations concluidas.");
 } catch (err) {

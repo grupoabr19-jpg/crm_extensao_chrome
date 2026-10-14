@@ -27,6 +27,10 @@ function normalizeSaleValue(raw) {
     : { ok: false, value: null };
 }
 
+function normalizeOrderNumber(raw) {
+  return String(raw || "").trim().slice(0, 120) || null;
+}
+
 function normalizePotential(value) {
   const map = {
     baixo: "low",
@@ -337,6 +341,18 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
           { id: "ganha", name: "Venda ganha", position: 5 },
           { id: "perdida", name: "Venda perdida", position: 6 }
         ]
+      },
+      {
+        id: "reativacao",
+        name: "Reativacao",
+        stages: [
+          { id: "conta-reativar", name: "Conta a reativar", position: 1 },
+          { id: "tentativa-contato", name: "Tentativa de contato", position: 2 },
+          { id: "interesse-identificado", name: "Interesse identificado", position: 3 },
+          { id: "proposta-enviada", name: "Proposta enviada", position: 4 },
+          { id: "reativado", name: "Reativado", position: 5 },
+          { id: "sem-interesse", name: "Sem interesse", position: 6 }
+        ]
       }
     ];
   }
@@ -435,6 +451,7 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
           potential: body.potential || null,
           temperature: body.temperature || null,
           saleValue: saleValue.value,
+          orderNumber: normalizeOrderNumber(body.orderNumber),
           source: body.source || null
         },
         owner: routed.user,
@@ -477,7 +494,7 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
       return { case: crmCase, handoff };
     },
     updateCase: async (caseId, body) => {
-      const found = db.cases.find((item) => item.id === caseId);
+      const found = db.cases.find((item) => item.id === caseId && !item.deleted_at);
       if (!found) return { error: "case_not_found" };
       const phone = normalizePhone(body.phone || "");
       if (!phone.ok) return { error: "invalid_phone", detail: phone.reason };
@@ -496,12 +513,16 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
       found.fields.potential = body.potential || null;
       found.fields.temperature = body.temperature || null;
       found.fields.saleValue = saleValue.value;
+      if (Object.prototype.hasOwnProperty.call(body, "orderNumber")) {
+        found.fields.orderNumber = normalizeOrderNumber(body.orderNumber);
+      }
       found.updated_at = new Date().toISOString();
       return { case: found };
     },
     searchCustomers: async (query) => {
       const term = String(query || "").trim().toLocaleLowerCase("pt-BR");
-      const all = Array.from(new Map(db.cases.map((item) => [item.contact.phone, {
+      const activeCases = db.cases.filter((item) => !item.deleted_at);
+      const all = Array.from(new Map(activeCases.map((item) => [item.contact.phone, {
         id: item.contact.customer_id || item.contact.phone,
         customer_code: item.contact.customer_code || null,
         name: item.contact.name,
@@ -509,7 +530,7 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
         city: item.fields.city,
         uf: item.fields.uf,
         profile: {},
-        case_count: db.cases.filter((candidate) => candidate.contact.phone === item.contact.phone).length
+        case_count: activeCases.filter((candidate) => candidate.contact.phone === item.contact.phone).length
       }])).values());
       if (term.length < 2) return { items: [], total: all.length };
       const items = all
@@ -519,17 +540,40 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
       return { items, total: all.length };
     },
     getCase: async (caseId) => {
-      const found = db.cases.find((item) => item.id === caseId);
+      const found = db.cases.find((item) => item.id === caseId && !item.deleted_at);
       return found ? { case: found } : { error: "case_not_found" };
+    },
+    deleteCase: async (caseId) => {
+      const found = db.cases.find((item) => item.id === caseId && !item.deleted_at);
+      if (!found) return { error: "case_not_found" };
+      found.deleted_at = new Date().toISOString();
+      return { ok: true, id: caseId };
+    },
+    listCustomers: async () => {
+      const activeCases = db.cases.filter((item) => !item.deleted_at);
+      const items = Array.from(new Map(activeCases.map((item) => [item.contact.phone, {
+        id: item.contact.id || item.contact.phone,
+        customer_code: item.contact.customer_code || null,
+        name: item.contact.name,
+        phone: item.contact.phone,
+        city: item.fields.city,
+        uf: item.fields.uf,
+        case_count: activeCases.filter((candidate) => candidate.contact.phone === item.contact.phone).length
+      }])).values());
+      return { items, total: items.length };
+    },
+    listSales: async () => {
+      const items = db.cases.filter((item) => !item.deleted_at && item.won_at);
+      return { items, total: items.length, totalValue: items.reduce((sum, item) => sum + Number(item.fields.saleValue || 0), 0) };
     },
     importCustomerRegistry: async () => ({ error: "persistent_database_required" }),
     listCases: async (options = {}) => {
       const phone = phoneDigitsForLookup(options.phone || "");
       const items = options.customerCode
-        ? db.cases.filter((item) => item.contact.customer_code === options.customerCode)
+        ? db.cases.filter((item) => !item.deleted_at && item.contact.customer_code === options.customerCode)
         : phone
-          ? db.cases.filter((item) => phoneDigitsForLookup(item.contact.phone || "") === phone)
-          : db.cases;
+          ? db.cases.filter((item) => !item.deleted_at && phoneDigitsForLookup(item.contact.phone || "") === phone)
+          : db.cases.filter((item) => !item.deleted_at);
       return { items, total: items.length };
     },
     listFunnels: async () => ({ items: memoryFunnels() }),
@@ -537,23 +581,42 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
       const funnel = memoryFunnels().find((f) => f.id === pipelineId || f.name === pipelineId) || memoryFunnels()[0];
       const columns = funnel.stages.map((stage) => ({
         ...stage,
-        cards: db.cases.filter((c) => (c.fields.stage || "Novo Lead") === stage.name || (c.fields.stage || "").toLowerCase() === stage.id)
+        cards: db.cases.filter((c) => !c.deleted_at && ((c.fields.stage || "Novo Lead") === stage.name || (c.fields.stage || "").toLowerCase() === stage.id))
       }));
       return { funnel, columns };
     },
     moveCaseStage: async (caseId, stageId) => {
-      const found = db.cases.find((c) => c.id === caseId);
+      const found = db.cases.find((c) => c.id === caseId && !c.deleted_at);
       if (!found) return { error: "case_not_found" };
       const funnel = memoryFunnels().find((f) => (f.stages || []).some((s) => s.id === stageId || s.name === stageId));
       const stage = funnel && (funnel.stages || []).find((s) => s.id === stageId || s.name === stageId);
       if (!stage) return { error: "stage_not_found" };
-      found.fields.pipeline = funnel.name;
-      found.fields.stage = stage.name;
+      if (stage.name === "Venda ganha") {
+        if (!(Number(found.fields.saleValue) > 0)) return { error: "won_sale_value_required" };
+        if (!normalizeOrderNumber(found.fields.orderNumber)) return { error: "won_order_number_required" };
+        found.status = "closed";
+        found.won_at = new Date().toISOString();
+      }
+      if (stage.name === "Venda perdida") {
+        const reactivation = memoryFunnels().find((item) => normalizeText(item.name).startsWith("REATIVA"));
+        found.fields.pipeline = reactivation.name;
+        found.fields.stage = reactivation.stages[0].name;
+        found.status = "in_service";
+        found.lost_at = new Date().toISOString();
+        found.won_at = null;
+      } else {
+        found.fields.pipeline = funnel.name;
+        found.fields.stage = stage.name;
+        if (stage.name !== "Venda ganha") {
+          found.status = "in_service";
+          found.won_at = null;
+        }
+      }
       found.updated_at = new Date().toISOString();
       return { case: found };
     },
     createTask: async (caseId, body) => {
-      const found = db.cases.find((c) => c.id === caseId);
+      const found = db.cases.find((c) => c.id === caseId && !c.deleted_at);
       if (!found) return { error: "case_not_found" };
       const task = { id: randomUUID(), case_id: caseId, title: String(body.title || "Follow-up").slice(0, 200), due_at: body.dueAt || null, kind: "follow_up", status: "open", created_at: new Date().toISOString() };
       db.tasks ||= [];
@@ -561,7 +624,7 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
       return { task };
     },
     recordCustomerContact: async (caseId) => {
-      const found = db.cases.find((item) => item.id === caseId);
+      const found = db.cases.find((item) => item.id === caseId && !item.deleted_at);
       if (!found) return { error: "case_not_found" };
       const contactedAt = new Date();
       found.last_contact_at = contactedAt.toISOString();
@@ -584,11 +647,12 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
       return { last_contact_at: found.last_contact_at, task };
     },
     listTasks: async (options = {}) => {
-      const items = (db.tasks || []).filter((task) => !options.kind || task.kind === options.kind);
+      const activeCaseIds = new Set(db.cases.filter((item) => !item.deleted_at).map((item) => item.id));
+      const items = (db.tasks || []).filter((task) => activeCaseIds.has(task.case_id) && (!options.kind || task.kind === options.kind));
       return { items, total: items.length };
     },
     addNote: async (caseId, body) => {
-      const found = db.cases.find((c) => c.id === caseId);
+      const found = db.cases.find((c) => c.id === caseId && !c.deleted_at);
       if (!found) return { error: "case_not_found" };
       const note = { id: randomUUID(), case_id: caseId, body: String(body.body || "").slice(0, 4000), created_at: new Date().toISOString() };
       db.notes ||= [];
@@ -596,18 +660,34 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
       return { note };
     },
     closeCase: async (caseId, body) => {
-      const found = db.cases.find((c) => c.id === caseId);
+      const found = db.cases.find((c) => c.id === caseId && !c.deleted_at);
       if (!found) return { error: "case_not_found" };
-      found.status = "closed";
-      found.fields.stage = body.outcome === "lost" ? "Venda perdida" : "Venda ganha";
+      const outcome = body.outcome === "lost" ? "lost" : "won";
+      const saleValue = normalizeSaleValue(body.saleValue);
+      if (!saleValue.ok) return { error: "invalid_sale_value" };
+      const orderNumber = normalizeOrderNumber(body.orderNumber);
+      if (outcome === "won" && !(saleValue.value > 0)) return { error: "won_sale_value_required" };
+      if (outcome === "won" && !orderNumber) return { error: "won_order_number_required" };
+      found.status = outcome === "lost" ? "in_service" : "closed";
+      if (outcome === "lost") {
+        const reactivation = memoryFunnels().find((item) => normalizeText(item.name).startsWith("REATIVA"));
+        found.fields.pipeline = reactivation.name;
+        found.fields.stage = reactivation.stages[0].name;
+        found.lost_at = new Date().toISOString();
+        found.won_at = null;
+      } else {
+        found.fields.stage = "Venda ganha";
+        found.won_at = new Date().toISOString();
+      }
       found.fields.lossReason = body.lossReason || null;
       found.fields.lossDetail = body.lossDetail || null;
-      found.fields.saleValue = body.saleValue || null;
+      found.fields.saleValue = saleValue.value;
+      found.fields.orderNumber = orderNumber;
       found.updated_at = new Date().toISOString();
       return { case: found };
     },
     transferCase: async (caseId, body) => {
-      const found = db.cases.find((c) => c.id === caseId);
+      const found = db.cases.find((c) => c.id === caseId && !c.deleted_at);
       if (!found) return { error: "case_not_found" };
       const routed = routeLead(body);
       const publicProtocol = protocol();
@@ -660,7 +740,8 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
     },
     kpis: async (pipelineId) => {
       const funnel = pipelineId ? memoryFunnels().find((item) => item.id === pipelineId || item.name.toLowerCase() === String(pipelineId).toLowerCase()) : null;
-      const cases = funnel ? db.cases.filter((item) => String(item.fields.pipeline || "").toLowerCase() === funnel.name.toLowerCase()) : db.cases;
+      const activeCases = db.cases.filter((item) => !item.deleted_at);
+      const cases = funnel ? activeCases.filter((item) => String(item.fields.pipeline || "").toLowerCase() === funnel.name.toLowerCase()) : activeCases;
       const caseIds = new Set(cases.map((item) => item.id));
       const handoffs = db.handoffs.filter((item) => caseIds.has(item.case_id));
       const tasks = (db.tasks || []).filter((item) => caseIds.has(item.case_id));
@@ -1027,6 +1108,8 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
         potential: row.potential,
         temperature: row.temperature,
         saleValue: row.sale_value,
+        orderNumber: row.order_number,
+        quoteNumber: row.quote_number,
         source: row.source_name
       },
       owner: row.owner_user_id ? { id: row.owner_user_id, name: row.owner_name, phone: row.owner_phone, department: row.department_name } : null,
@@ -1035,7 +1118,9 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       updated_at: row.updated_at,
       last_contact_at: row.last_contact_at,
       reactivation_reference_at: row.reactivation_reference_at,
-      reactivation_reference_source: row.reactivation_reference_source
+      reactivation_reference_source: row.reactivation_reference_source,
+      won_at: row.won_at,
+      lost_at: row.lost_at
     };
   }
   function shapeHandoff(row) {
@@ -1071,8 +1156,9 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
   const caseSelect = `
     select c.id, c.contact_id, h.protocol, c.status, co.display_name contact_name, co.customer_code, ci.e164 contact_phone, ci.original original_phone,
       c.company_name, c.city, c.uf, s.label segment_label, c.need, d.name department_name,
-      p.name pipeline_name, ps.name stage_name, c.potential, c.temperature, c.sale_value, src.name source_name,
+      p.name pipeline_name, ps.name stage_name, c.potential, c.temperature, c.sale_value, c.order_number, c.quote_number, src.name source_name,
       c.last_contact_at::text, c.reactivation_reference_at::text, c.reactivation_reference_source,
+      c.won_at::text, c.lost_at::text,
       c.owner_user_id, u.display_name owner_name, coalesce(wa.e164, hwa.e164) owner_phone, ca.reason routing_reason,
       c.created_at::text, c.updated_at::text
     from cases c
@@ -1104,7 +1190,7 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       const ctx = await ready();
       const counts = await one(`
         select
-          (select count(*)::int from cases where organization_id=$1) cases,
+          (select count(*)::int from cases where organization_id=$1 and deleted_at is null) cases,
           (select count(*)::int from handoffs where organization_id=$1) handoffs,
           (select count(*)::int from audit_events where organization_id=$1 and action='observation_received') observations,
           (select count(*)::int from extension_devices where organization_id=$1) devices
@@ -1122,7 +1208,7 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       );
       const counts = await one(`
         select
-          (select count(*)::int from cases where organization_id=$1) cases,
+          (select count(*)::int from cases where organization_id=$1 and deleted_at is null) cases,
           (select count(*)::int from handoffs where organization_id=$1) handoffs,
           (select count(*)::int from audit_events where organization_id=$1 and action='observation_received') observations,
           (select count(*)::int from extension_devices where organization_id=$1) devices
@@ -1302,8 +1388,8 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       try {
         await client.query("begin");
         const crm = await client.query(
-          `insert into cases(organization_id,contact_id,status,department_id,owner_user_id,company_name,city,uf,segment_id,source_id,pipeline_id,stage_id,potential,temperature,need,triage_summary,sale_value)
-           values($1,$2,'awaiting_arrival',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) returning id`,
+          `insert into cases(organization_id,contact_id,status,department_id,owner_user_id,company_name,city,uf,segment_id,source_id,pipeline_id,stage_id,potential,temperature,need,triage_summary,sale_value,order_number)
+           values($1,$2,'awaiting_arrival',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) returning id`,
           [
             ctx.org.id,
             contact.id,
@@ -1320,7 +1406,8 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
             normalizeTemperature(body.temperature),
             body.need || null,
             body.need ? String(body.need).slice(0, 1000) : null,
-            saleValue.value
+            saleValue.value,
+            normalizeOrderNumber(body.orderNumber)
           ]
         );
         const caseId = crm.rows[0].id;
@@ -1382,7 +1469,7 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       if (!phone.ok) return { error: "invalid_phone", detail: phone.reason };
       const saleValue = normalizeSaleValue(body.saleValue);
       if (!saleValue.ok) return { error: "invalid_sale_value" };
-      const current = await one("select c.id, c.contact_id from cases c where c.organization_id=$1 and c.id=$2", [ctx.org.id, caseId]);
+      const current = await one("select c.id, c.contact_id, c.order_number from cases c where c.organization_id=$1 and c.id=$2 and c.deleted_at is null", [ctx.org.id, caseId]);
       if (!current) return { error: "case_not_found" };
       const segment = await findSegment(ctx.org.id, body.segment);
       const source = body.source ? await one("select id from acquisition_sources where organization_id=$1 and lower(name)=lower($2) limit 1", [ctx.org.id, body.source]) : null;
@@ -1409,8 +1496,9 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
               temperature=$10,
               need=$11,
               sale_value=$12,
+              order_number=$13,
               updated_at=now()
-          where organization_id=$1 and id=$2
+          where organization_id=$1 and id=$2 and deleted_at is null
         `, [
           ctx.org.id,
           caseId,
@@ -1423,7 +1511,8 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
           normalizePotential(body.potential),
           normalizeTemperature(body.temperature),
           body.need ? String(body.need).slice(0, 1000) : null,
-          saleValue.value
+          saleValue.value,
+          Object.prototype.hasOwnProperty.call(body, "orderNumber") ? normalizeOrderNumber(body.orderNumber) : current.order_number
         ]);
         if (!result.rowCount) {
           await client.query("rollback");
@@ -1472,7 +1561,7 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
           order by (source='mvp_panel') desc, reliable desc, id
           limit 1
         ) ci on true
-        left join cases c on c.contact_id=co.id and c.organization_id=co.organization_id
+        left join cases c on c.contact_id=co.id and c.organization_id=co.organization_id and c.deleted_at is null
         left join customer_purchase_summaries ps on ps.organization_id=co.organization_id and ps.contact_id=co.id
         where co.organization_id=$1
           and (position(lower($2) in lower(coalesce(co.display_name,''))) > 0
@@ -1523,8 +1612,46 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
     },
     getCase: async (caseId) => {
       const ctx = await ready();
-      const row = await one(`${caseSelect} where c.organization_id=$1 and c.id=$2 order by h.created_at desc limit 1`, [ctx.org.id, caseId]);
+      const row = await one(`${caseSelect} where c.organization_id=$1 and c.id=$2 and c.deleted_at is null order by h.created_at desc limit 1`, [ctx.org.id, caseId]);
       return row ? { case: shapeCase(row) } : { error: "case_not_found" };
+    },
+    deleteCase: async (caseId) => {
+      const ctx = await ready();
+      const deleted = await one("update cases set deleted_at=now(),updated_at=now() where organization_id=$1 and id=$2 and deleted_at is null returning id", [ctx.org.id, caseId]);
+      return deleted ? { ok: true, id: deleted.id } : { error: "case_not_found" };
+    },
+    listCustomers: async () => {
+      const ctx = await ready();
+      const items = await many(`
+        select co.id,co.customer_code,co.display_name name,co.customer_profile profile,
+          ci.e164 phone,count(distinct c.id)::int case_count,max(c.updated_at)::text last_case_at,
+          max(coalesce(c.city,co.customer_profile->>'city')) city,
+          max(coalesce(c.uf,co.customer_profile->>'uf')) uf,
+          coalesce(ps.order_count,0)::int order_count,coalesce(ps.total_sales,0)::numeric imported_total_sales,
+          ps.last_purchase_at::text last_purchase_at
+        from contacts co
+        left join lateral (
+          select e164 from contact_identifiers
+          where organization_id=co.organization_id and contact_id=co.id and kind='phone'
+          order by (source='mvp_panel') desc,reliable desc,id limit 1
+        ) ci on true
+        left join cases c on c.contact_id=co.id and c.organization_id=co.organization_id and c.deleted_at is null
+        left join customer_purchase_summaries ps on ps.organization_id=co.organization_id and ps.contact_id=co.id
+        where co.organization_id=$1
+        group by co.id,ci.e164,ps.order_count,ps.total_sales,ps.last_purchase_at
+        order by co.display_name nulls last,co.customer_code
+        limit 1000
+      `, [ctx.org.id]);
+      return { items, total: items.length };
+    },
+    listSales: async () => {
+      const ctx = await ready();
+      const rows = await many(`${caseSelect} where c.organization_id=$1 and c.deleted_at is null and c.won_at is not null order by c.won_at desc limit 1000`, [ctx.org.id]);
+      const items = Array.from(new Map(rows.map((row) => {
+        const item = shapeCase(row);
+        return [item.id, item];
+      })).values());
+      return { items, total: items.length, totalValue: items.reduce((sum, item) => sum + Number(item.fields.saleValue || 0), 0) };
     },
     importCustomerRegistry: async (plan) => {
       const ctx = await ready();
@@ -1739,10 +1866,10 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       const ctx = await ready();
       const phone = phoneDigitsForLookup(options.phone || "");
       const rows = options.customerCode
-        ? await many(`${caseSelect} where c.organization_id=$1 and co.customer_code=$2 order by c.updated_at desc limit 100`, [ctx.org.id, options.customerCode])
+        ? await many(`${caseSelect} where c.organization_id=$1 and c.deleted_at is null and co.customer_code=$2 order by c.updated_at desc limit 100`, [ctx.org.id, options.customerCode])
         : phone
-          ? await many(`${caseSelect} where c.organization_id=$1 and regexp_replace(coalesce(ci.e164, ci.original, ''), '\\D', '', 'g') in ($2, $3) order by c.updated_at desc limit 100`, [ctx.org.id, phone, `55${phone}`])
-        : await many(`${caseSelect} where c.organization_id=$1 order by c.created_at desc limit 100`, [ctx.org.id]);
+          ? await many(`${caseSelect} where c.organization_id=$1 and c.deleted_at is null and regexp_replace(coalesce(ci.e164, ci.original, ''), '\\D', '', 'g') in ($2, $3) order by c.updated_at desc limit 100`, [ctx.org.id, phone, `55${phone}`])
+        : await many(`${caseSelect} where c.organization_id=$1 and c.deleted_at is null order by c.created_at desc limit 100`, [ctx.org.id]);
       const items = rows.map(shapeCase);
       return { items, total: items.length };
     },
@@ -1763,7 +1890,7 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       const pipeline = await one("select id,name from pipelines where organization_id=$1 and (id::text=$2 or lower(name)=lower($2)) limit 1", [ctx.org.id, pipelineId]);
       if (!pipeline) return { funnel: null, columns: [] };
       const stages = await many("select id,name,position,internal_only from pipeline_stages where pipeline_id=$1 order by position", [pipeline.id]);
-      const rows = await many(`${caseSelect} where c.pipeline_id=$1 order by c.updated_at desc limit 300`, [pipeline.id]);
+      const rows = await many(`${caseSelect} where c.pipeline_id=$1 and c.deleted_at is null order by c.updated_at desc limit 300`, [pipeline.id]);
       const cards = rows.map(shapeCase);
       const columns = stages.map((stage) => ({
         ...stage,
@@ -1774,21 +1901,45 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
     moveCaseStage: async (caseId, stageId) => {
       const ctx = await ready();
       const stage = await one(`
-        select ps.id,ps.name,ps.pipeline_id
+        select ps.id,ps.name,ps.pipeline_id,p.name pipeline_name
         from pipeline_stages ps join pipelines p on p.id=ps.pipeline_id
         where ps.id=$1 and p.organization_id=$2
       `, [stageId, ctx.org.id]);
       if (!stage) return { error: "stage_not_found" };
-      const updated = await one("update cases set stage_id=$3, pipeline_id=$4, updated_at=now() where organization_id=$1 and id=$2 returning id", [ctx.org.id, caseId, stage.id, stage.pipeline_id]);
+      const current = await one("select id,sale_value,order_number from cases where organization_id=$1 and id=$2 and deleted_at is null", [ctx.org.id, caseId]);
+      if (!current) return { error: "case_not_found" };
+      if (normalizeText(stage.name) === "VENDA GANHA") {
+        if (!(Number(current.sale_value) > 0)) return { error: "won_sale_value_required" };
+        if (!normalizeOrderNumber(current.order_number)) return { error: "won_order_number_required" };
+      }
+      let target = stage;
+      if (normalizeText(stage.name) === "VENDA PERDIDA") {
+        target = await one(`
+          select ps.id,ps.name,ps.pipeline_id,p.name pipeline_name
+          from pipelines p join pipeline_stages ps on ps.pipeline_id=p.id
+          where p.organization_id=$1 and lower(p.name) like 'reativa%'
+          order by ps.position limit 1
+        `, [ctx.org.id]);
+        if (!target) return { error: "reactivation_stage_not_found" };
+      }
+      const updated = await one(`
+        update cases set stage_id=$3,pipeline_id=$4,
+          status=case when $5='won' then 'closed' else 'in_service' end,
+          won_at=case when $5='won' then coalesce(won_at,now()) else null end,
+          lost_at=case when $5='lost' then now() else lost_at end,
+          closed_at=case when $5='won' then coalesce(closed_at,now()) when $5='lost' then null else closed_at end,
+          updated_at=now()
+        where organization_id=$1 and id=$2 and deleted_at is null returning id
+      `, [ctx.org.id, caseId, target.id, target.pipeline_id, normalizeText(stage.name) === "VENDA GANHA" ? "won" : normalizeText(stage.name) === "VENDA PERDIDA" ? "lost" : "open"]);
       if (!updated) return { error: "case_not_found" };
-      await pool.query("insert into stage_history(case_id,stage_id) values($1,$2)", [caseId, stage.id]);
+      await pool.query("insert into stage_history(case_id,stage_id) values($1,$2)", [caseId, target.id]);
       const crmCase = shapeCase(await one(`${caseSelect} where c.id=$1 order by h.created_at desc limit 1`, [caseId]));
       return { case: crmCase };
     },
     createTask: async (caseId, body) => {
       const ctx = await ready();
       const task = await one(
-        "insert into tasks(organization_id,case_id,assignee_user_id,title,due_at) select $1,c.id,c.owner_user_id,$3,$4 from cases c where c.organization_id=$1 and c.id=$2 returning id, case_id, title, due_at::text, status, created_at::text",
+        "insert into tasks(organization_id,case_id,assignee_user_id,title,due_at) select $1,c.id,c.owner_user_id,$3,$4 from cases c where c.organization_id=$1 and c.id=$2 and c.deleted_at is null returning id, case_id, title, due_at::text, status, created_at::text",
         [ctx.org.id, caseId, String(body.title || "Follow-up").slice(0, 200), body.dueAt || null]
       );
       if (!task) return { error: "case_not_found" };
@@ -1797,7 +1948,7 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
     recordCustomerContact: async (caseId) => {
       const ctx = await ready();
       const current = await one(
-        "select id from cases where organization_id=$1 and id=$2",
+        "select id from cases where organization_id=$1 and id=$2 and deleted_at is null",
         [ctx.org.id, caseId]
       );
       if (!current) return { error: "case_not_found" };
@@ -1811,7 +1962,7 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
         const task = (await client.query(`
           insert into tasks(organization_id,case_id,assignee_user_id,title,due_at,kind)
           select $1,c.id,c.owner_user_id,'Reativar cliente (30 dias antes do limite de 90 dias)',$3,'reactivation'
-          from cases c where c.organization_id=$1 and c.id=$2
+           from cases c where c.organization_id=$1 and c.id=$2 and c.deleted_at is null
           returning id,case_id,title,due_at::text,kind,status,created_at::text
         `, [ctx.org.id, caseId, dueAt.toISOString()])).rows[0];
         await client.query("commit");
@@ -1831,7 +1982,7 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
         join cases c on c.id=t.case_id
         join contacts co on co.id=c.contact_id
         left join users u on u.id=t.assignee_user_id
-        where t.organization_id=$1 and ($2::text is null or t.kind=$2)
+        where t.organization_id=$1 and c.deleted_at is null and ($2::text is null or t.kind=$2)
         order by coalesce(t.due_at, t.created_at), t.created_at desc
         limit 200
       `, [ctx.org.id, options.kind || null]);
@@ -1840,40 +1991,49 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
     addNote: async (caseId, body) => {
       const ctx = await ready();
       const note = await one(
-        "insert into notes(organization_id,case_id,body) select $1,c.id,$3 from cases c where c.id=$2 returning id, case_id, body, created_at::text",
+        "insert into notes(organization_id,case_id,body) select $1,c.id,$3 from cases c where c.organization_id=$1 and c.id=$2 and c.deleted_at is null returning id, case_id, body, created_at::text",
         [ctx.org.id, caseId, String(body.body || "").slice(0, 4000)]
       );
       if (!note) return { error: "case_not_found" };
       return { note };
     },
     closeCase: async (caseId, body) => {
-      await ready();
+      const ctx = await ready();
       const outcome = body.outcome === "lost" ? "lost" : "won";
-      const current = await one("select pipeline_id from cases where id=$1", [caseId]);
+      const saleValue = normalizeSaleValue(body.saleValue);
+      if (!saleValue.ok) return { error: "invalid_sale_value" };
+      const orderNumber = normalizeOrderNumber(body.orderNumber);
+      if (outcome === "won" && !(saleValue.value > 0)) return { error: "won_sale_value_required" };
+      if (outcome === "won" && !orderNumber) return { error: "won_order_number_required" };
+      const current = await one("select pipeline_id from cases where organization_id=$1 and id=$2 and deleted_at is null", [ctx.org.id, caseId]);
       if (!current) return { error: "case_not_found" };
-      const stageName = outcome === "lost" ? "Venda perdida" : "Venda ganha";
-      const stage = await one("select id from pipeline_stages where pipeline_id=$1 and lower(name)=lower($2) limit 1", [current.pipeline_id, stageName]);
+      const stage = outcome === "lost"
+        ? await one(`select ps.id,ps.pipeline_id from pipelines p join pipeline_stages ps on ps.pipeline_id=p.id where p.organization_id=$1 and lower(p.name) like 'reativa%' order by ps.position limit 1`, [ctx.org.id])
+        : await one("select id,pipeline_id from pipeline_stages where pipeline_id=$1 and lower(name)=lower('Venda ganha') limit 1", [current.pipeline_id]);
+      if (!stage) return { error: outcome === "lost" ? "reactivation_stage_not_found" : "stage_not_found" };
       const lossReason = outcome === "lost" && body.lossReason
         ? await one("select id from loss_reasons where lower(name)=lower($1) limit 1", [body.lossReason])
         : null;
       await pool.query(`
         update cases
-        set status='closed',
-            stage_id=coalesce($2, stage_id),
-            sale_value=case when $3::numeric is null then sale_value else $3 end,
-            loss_reason_id=$4,
-            loss_detail=$5,
-            won_at=case when $6='won' then now() else won_at end,
-            lost_at=case when $6='lost' then now() else lost_at end,
-            closed_at=now(),
+        set status=case when $7='won' then 'closed' else 'in_service' end,
+            stage_id=$2,pipeline_id=$3,
+            sale_value=case when $4::numeric is null then sale_value else $4 end,
+            order_number=case when $7='won' then $5 else order_number end,
+            loss_reason_id=$6,
+            loss_detail=$8,
+            won_at=case when $7='won' then now() else null end,
+            lost_at=case when $7='lost' then now() else lost_at end,
+            closed_at=case when $7='won' then now() else null end,
             updated_at=now()
         where id=$1
-      `, [caseId, stage?.id || null, body.saleValue ? Number(body.saleValue) : null, lossReason?.id || null, body.lossDetail || null, outcome]);
+      `, [caseId, stage.id, stage.pipeline_id, saleValue.value, orderNumber, lossReason?.id || null, outcome, body.lossDetail || null]);
+      await pool.query("insert into stage_history(case_id,stage_id) values($1,$2)", [caseId, stage.id]);
       return { case: shapeCase(await one(`${caseSelect} where c.id=$1 order by h.created_at desc limit 1`, [caseId])) };
     },
     transferCase: async (caseId, body) => {
       const ctx = await ready();
-      const existing = await one(`${caseSelect} where c.id=$1 order by h.created_at desc limit 1`, [caseId]);
+      const existing = await one(`${caseSelect} where c.organization_id=$1 and c.id=$2 and c.deleted_at is null order by h.created_at desc limit 1`, [ctx.org.id, caseId]);
       if (!existing) return { error: "case_not_found" };
       const routed = await ensureManualDestination(ctx, body);
       const publicProtocol = protocol();
@@ -2001,33 +2161,33 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
           count(*) filter (where won_at is not null)::int won,
           count(*) filter (where lost_at is not null)::int lost,
           coalesce(sum(sale_value),0)::numeric sale_value
-        from cases where organization_id=$1${caseFilter}
+        from cases where organization_id=$1 and deleted_at is null${caseFilter}
       `, caseParams);
-      const byStatus = await many(`select status, count(*)::int count from cases where organization_id=$1${caseFilter} group by status order by status`, caseParams);
+      const byStatus = await many(`select status, count(*)::int count from cases where organization_id=$1 and deleted_at is null${caseFilter} group by status order by status`, caseParams);
       const byPipeline = funnel ? [{ pipeline: funnel.name, count: totals.cases }] : await many(`
         select coalesce(p.name,'Sem funil') pipeline, count(c.id)::int count
         from cases c left join pipelines p on p.id=c.pipeline_id
-        where c.organization_id=$1 group by p.name order by count desc
+        where c.organization_id=$1 and c.deleted_at is null group by p.name order by count desc
       `, [ctx.org.id]);
       const handoffFilter = funnel ? " and c.pipeline_id=$2" : "";
       const handoffParams = funnel ? [ctx.org.id, funnel.id] : [ctx.org.id];
       const handoffs = await one(`
         select count(*)::int total, count(*) filter (where exists (select 1 from handoff_events he where he.handoff_id=h.id and he.type='claimed'))::int claimed
-        from handoffs h join cases c on c.id=h.case_id where h.organization_id=$1${handoffFilter}
+        from handoffs h join cases c on c.id=h.case_id where h.organization_id=$1 and c.deleted_at is null${handoffFilter}
       `, handoffParams);
       const tasks = await one(`
         select count(*) filter (where t.status='open')::int open,
                count(*) filter (where t.status='open' and t.due_at < now())::int overdue
         from tasks t join cases c on c.id=t.case_id
-        where t.organization_id=$1${funnel ? " and c.pipeline_id=$2" : ""}
+        where t.organization_id=$1 and c.deleted_at is null${funnel ? " and c.pipeline_id=$2" : ""}
       `, caseParams);
       return { funnel: funnel ? { id: funnel.id, name: funnel.name } : null, totals, handoffs, tasks, byStatus, byPipeline };
     },
     exportCasesCsv: async () => {
       await ready();
-      const rows = await many(`${caseSelect} order by c.created_at desc limit 5000`);
-      const header = ["id", "protocol", "status", "name", "phone", "city", "uf", "segment", "pipeline", "stage", "owner", "created_at"];
-      return toCsv([header, ...rows.map((r) => [r.id, r.protocol, r.status, r.contact_name, r.contact_phone, r.city, r.uf, r.segment_label, r.pipeline_name, r.stage_name, r.owner_name, r.created_at])]);
+      const rows = await many(`${caseSelect} where c.deleted_at is null order by c.created_at desc limit 5000`);
+      const header = ["id", "protocol", "status", "name", "phone", "city", "uf", "segment", "pipeline", "stage", "valor_orcamento", "numero_pedido", "owner", "created_at"];
+      return toCsv([header, ...rows.map((r) => [r.id, r.protocol, r.status, r.contact_name, r.contact_phone, r.city, r.uf, r.segment_label, r.pipeline_name, r.stage_name, r.sale_value, r.order_number, r.owner_name, r.created_at])]);
     },
     pendingHandoffs: async (destinationPhone) => {
       await ready();

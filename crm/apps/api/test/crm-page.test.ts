@@ -25,4 +25,17 @@ describe("CRM web page", () => {
     expect(html).toContain("url.searchParams.get('case')");
     expect(html).toContain("openCard(result.case)");
   });
+
+  it("exposes customer, sales and recoverable card deletion controls", () => {
+    expect(html).toContain('id="navCustomers"');
+    expect(html).toContain('id="navSales"');
+    expect(html).toContain('class="cardDelete"');
+    expect(html).toContain("method: 'DELETE'");
+  });
+
+  it("requires value and order number in the won-sale workflow", () => {
+    expect(html).toContain('id="orderNumber"');
+    expect(html).toContain('won_order_number_required');
+    expect(html).toContain('Venda perdida enviada ao funil de reativação.');
+  });
 });

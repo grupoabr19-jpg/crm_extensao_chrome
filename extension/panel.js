@@ -188,6 +188,7 @@
     $('saleValue').value = crmCase
       ? (fields.saleValue == null ? '' : String(fields.saleValue))
       : value('cfgDefaultSaleValue');
+    $('orderNumber').value = crmCase ? (fields.orderNumber || '') : '';
     ['source', 'segment', 'department', 'potential', 'temperature'].forEach(function (id) {
       setFormSelect(id, crmCase ? fields[id] || '' : defaults[id] || '');
     });
@@ -212,7 +213,7 @@
       segment: value('segment'), department: value('department'),
       pipeline: value('cfgDefaultPipeline'), stage: value('cfgDefaultStage'),
       potential: value('potential'), temperature: value('temperature'),
-      need: value('need'), nextTask: value('nextTask'), saleValue: value('saleValue'),
+      need: value('need'), nextTask: value('nextTask'), saleValue: value('saleValue'), orderNumber: value('orderNumber'),
       responsibleName: value('responsibleName'), responsiblePhone: value('responsiblePhone')
     };
   }
@@ -490,24 +491,44 @@
       renderPipelineTracker();
       return;
     }
+    var destinationStage = null;
+    crmFunnels.some(function (funnel) {
+      destinationStage = (funnel.stages || []).find(function (stage) { return stage.id === stageId; }) || null;
+      return !!destinationStage;
+    });
+    var isWon = destinationStage && String(destinationStage.name || '').toLowerCase() === 'venda ganha';
+    if (isWon && !(Number(value('saleValue').replace(',', '.')) > 0)) {
+      renderPipelineTracker();
+      return say('Informe o valor do orçamento antes de marcar como venda ganha.', 'warn');
+    }
+    if (isWon && !value('orderNumber')) {
+      renderPipelineTracker();
+      return say('Informe o número do pedido antes de marcar como venda ganha.', 'warn');
+    }
     var stageSelect = $('activeStage');
     stageSelect.disabled = true;
     say('Movendo ficha no Kanban...');
-    request('/v1/cases/' + encodeURIComponent(current.id) + '/stage', {
+    var saveBeforeWinning = isWon
+      ? request('/v1/cases/' + encodeURIComponent(current.id), { method: 'PATCH', body: JSON.stringify(caseFormPayload()) })
+      : Promise.resolve();
+    var movedCase = null;
+    saveBeforeWinning.then(function () { return request('/v1/cases/' + encodeURIComponent(current.id) + '/stage', {
       method: 'POST',
       body: JSON.stringify({ stageId: stageId })
-    }).then(function (result) {
+    }); }).then(function (result) {
+      movedCase = result.case || null;
       if (result.case) {
         var index = crmCases.findIndex(function (item) { return item.id === result.case.id; });
         if (index >= 0) crmCases[index] = result.case;
       }
       return loadCrmData(current.id);
     }).then(function () {
-      say('Etapa atualizada. O card do Kanban já reflete esta mudança.', 'ok');
+      say(movedCase && movedCase.lost_at ? 'Venda perdida enviada automaticamente ao funil de reativação.' : 'Etapa atualizada. O card do Kanban já reflete esta mudança.', 'ok');
     }).catch(function (err) {
       activePipelineId = (funnelForCase(current) || {}).id || activePipelineId;
       renderPipelineTracker();
-      say('Não foi possível mover a ficha: ' + err.message, 'err');
+      var messages = { won_sale_value_required: 'Informe o valor do orçamento.', won_order_number_required: 'Informe o número do pedido.' };
+      say('Não foi possível mover a ficha: ' + (messages[err.message] || err.message), 'err');
     }).finally(function () {
       renderPipelineTracker();
     });
@@ -531,7 +552,7 @@
       '<div class="section"><h3>Funil e etapa</h3><label for="customerSearch">Cliente (nome ou código)</label><input id="customerSearch" type="search" autocomplete="off" placeholder="Buscar por nome ou C00000000" aria-controls="customerResults" aria-autocomplete="list"><div id="customerHelp" class="hint">Carregando cadastro de clientes...</div><div id="customerResults" class="customerResults" role="listbox" hidden></div><div class="grid"><div><label>Funil</label><select id="activePipeline"><option value="">Carregando funis...</option></select></div><div><label>Etapa</label><select id="activeStage" disabled><option value="">Selecione uma ficha primeiro</option></select></div></div><div class="pipe" id="pipelineSteps" aria-label="Progresso do lead no funil"></div><div class="stepLabel" id="pipelineProgressLabel">Carregando funis e fichas...</div><div class="actions"><button class="secondary" id="refreshPipeline">Atualizar ficha</button></div></div>' +
       '<div class="section"><h3>Qualificação</h3><div class="metricRow"><div class="metric"><b id="leadScore">0%</b><span>completo</span></div><div class="metric"><b id="tempLabel">Morno</b><span>temperatura</span></div><div class="metric"><b id="potLabel">Medio</b><span>potencial</span></div></div></div>' +
       '<div class="section"><h3>Contato</h3><div class="grid"><div><label>Nome</label><input id="name" placeholder="Cliente"></div><div><label>Telefone</label><input id="phone" placeholder="+5511999999999"></div><div><label>Empresa</label><input id="company"></div><div><label>Origem</label><select id="source"><option>Não informado</option><option>Instagram</option><option>Facebook</option><option>LinkedIn</option><option>Google</option><option>Feiras/Eventos</option></select></div><div><label>Cidade</label><input id="city"></div><div><label>UF</label><input id="uf" maxlength="2"></div></div></div>' +
-      '<div class="section"><h3>Negócio</h3><div class="grid"><div><label>Segmento</label><select id="segment"><option></option><option>Cliente Final</option><option>Construtoras</option><option>Deposito (Armadores)</option><option>Distribuidores</option><option>Industria de Transformacao</option><option>Revendedores</option><option>Revendas</option><option>Construcao Civil</option><option>Arquitetura</option><option>Pedreiro</option></select></div><div><label>Departamento</label><select id="department"><option>Vendas</option><option>Financeiro</option><option>Expedicao</option><option>SAC</option><option>Pos-venda</option></select></div><div><label>Funil</label><select id="pipeline"><option>VAREJO</option><option>ATACADO</option><option>Pos-Venda</option><option>Reativacao</option><option>Liderancas</option></select></div><div><label>Etapa</label><select id="stage"><option>Novo Lead</option><option>Contato</option><option>Qualificacao</option><option>Cotacao</option><option>Venda ganha</option><option>Venda perdida</option></select></div><div><label>Potencial</label><select id="potential"><option>Medio</option><option>Baixo</option><option>Alto</option><option>Conta-chave</option><option>Nao classificado</option></select></div><div><label>Temperatura</label><select id="temperature"><option>Morno</option><option>Quente</option><option>Frio</option><option>Nao classificado</option></select></div><div class="full"><label>Necessidade / resumo da triagem</label><textarea id="need" placeholder="Produto, quantidade, medidas, contexto e restricoes informadas pelo cliente"></textarea></div><div><label>Responsavel</label><input id="responsibleName" value="Vendedor ABR"></div><div><label>WhatsApp responsavel</label><input id="responsiblePhone" placeholder="+5511999990001"></div><div><label>Proxima tarefa</label><input id="nextTask" placeholder="Retornar, cotar, confirmar dados..."></div><div><label>Valor estimado interno</label><input id="saleValue" placeholder="Nao preencher se desconhecido"></div></div><div class="chips"><span class="chip good">Humano pode assumir</span><span class="chip">IA supervisionada</span><span class="chip hot">Nao prometer preco/prazo</span></div><div class="actions"><button id="aiFill" class="secondary">IA preencher</button><button id="aiCreate" class="secondary">IA criar + transferir</button><button id="createCase">Criar ficha + link</button><button class="secondary" id="listCases">Listar fichas</button></div></div>' +
+      '<div class="section"><h3>Negócio</h3><div class="grid"><div><label>Segmento</label><select id="segment"><option></option><option>Cliente Final</option><option>Construtoras</option><option>Deposito (Armadores)</option><option>Distribuidores</option><option>Industria de Transformacao</option><option>Revendedores</option><option>Revendas</option><option>Construcao Civil</option><option>Arquitetura</option><option>Pedreiro</option></select></div><div><label>Departamento</label><select id="department"><option>Vendas</option><option>Financeiro</option><option>Expedicao</option><option>SAC</option><option>Pos-venda</option></select></div><div><label>Funil</label><select id="pipeline"><option>VAREJO</option><option>ATACADO</option><option>Pos-Venda</option><option>Reativacao</option><option>Liderancas</option></select></div><div><label>Etapa</label><select id="stage"><option>Novo Lead</option><option>Contato</option><option>Qualificacao</option><option>Cotacao</option><option>Venda ganha</option><option>Venda perdida</option></select></div><div><label>Potencial</label><select id="potential"><option>Medio</option><option>Baixo</option><option>Alto</option><option>Conta-chave</option><option>Nao classificado</option></select></div><div><label>Temperatura</label><select id="temperature"><option>Morno</option><option>Quente</option><option>Frio</option><option>Nao classificado</option></select></div><div class="full"><label>Necessidade / resumo da triagem</label><textarea id="need" placeholder="Produto, quantidade, medidas, contexto e restricoes informadas pelo cliente"></textarea></div><div><label>Responsavel</label><input id="responsibleName" value="Vendedor ABR"></div><div><label>WhatsApp responsavel</label><input id="responsiblePhone" placeholder="+5511999990001"></div><div><label>Proxima tarefa</label><input id="nextTask" placeholder="Retornar, cotar, confirmar dados..."></div><div><label>Valor do orçamento</label><input id="saleValue" inputmode="decimal" placeholder="Preencha antes de marcar venda ganha"></div><div><label>Número do pedido</label><input id="orderNumber" placeholder="Obrigatório para venda ganha"></div></div><div class="chips"><span class="chip good">Humano pode assumir</span><span class="chip">IA supervisionada</span><span class="chip hot">Nao prometer preco/prazo</span></div><div class="actions"><button id="aiFill" class="secondary">IA preencher</button><button id="aiCreate" class="secondary">IA criar + transferir</button><button id="createCase">Criar ficha + link</button><button class="secondary" id="listCases">Listar fichas</button></div></div>' +
     '</div>' +
     '<div class="view" id="dest"><div class="section"><h3>Fila do responsavel</h3><label>Telefone destino</label><input id="destinationPhone" placeholder="+5511999990001"><div class="actions"><button id="pending">Buscar pendentes</button><button class="secondary" id="refreshPend">Atualizar</button></div><div id="handoffs"></div></div></div>' +
     '<div class="view" id="tasks"><div class="section"><h3>Notas e tarefas</h3><label>Nota interna</label><textarea id="note" placeholder="Nao vai para o WhatsApp"></textarea><label>Tarefa</label><input id="task" placeholder="Ex.: ligar amanha as 9h"><div class="actions"><button class="secondary" id="holdAi">Pausar IA</button><button class="secondary" id="resumeAi">Retomar triagem</button><button class="ghost" id="finish">Concluir</button></div><div class="hint">MVP local: notas e tarefas ficam no painel ate a proxima recarga.</div></div></div>' +

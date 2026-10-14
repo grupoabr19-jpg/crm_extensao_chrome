@@ -37,6 +37,7 @@
     .editField input,.editField select,.editField textarea{margin:0 0 12px}
     .editField textarea{min-height:76px}
     .dialogFooter{flex:none;display:flex;justify-content:flex-end;gap:9px;padding:13px 24px;border-top:1px solid var(--line);background:#fff}
+    .cardDelete{position:absolute;right:9px;top:9px;width:30px;height:30px;min-height:0;padding:0;display:grid;place-items:center;border:1px solid transparent;border-radius:8px;background:transparent;color:#98a4b4;z-index:2}.cardDelete:hover{background:#fff0ee;border-color:#f2d1cd;color:#b8463d;box-shadow:none}.cardDelete svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.card> b{padding-right:30px}.dataView{flex:1;overflow:auto;padding:24px 32px 40px;display:block}.dataView.view.active{display:block}.dataSummary{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}.dataSummary h2{margin:0;font-size:19px}.dataSummary p{margin:5px 0 0;color:var(--muted);font-size:12px}.summaryValue{font-size:24px;font-weight:750;color:var(--green)}.dataTableBox{background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 16px;box-shadow:0 2px 8px #1b2b4308}.emptyTable{padding:28px;text-align:center;color:var(--muted);font-size:12px}
     @media(max-width:640px){.drawer{width:calc(100vw - 20px);height:calc(100vh - 20px);border-radius:12px}.drawerHeader{padding-left:18px}.drawerBody{padding:16px 18px}.editGrid{grid-template-columns:1fr}.editField.full{grid-column:auto}.dialogFooter{padding:12px 18px}}
   </style>
 </head>
@@ -60,6 +61,8 @@
       <div class="brand"><div class="logo">ABR</div><div class="brand-copy"><div class="brand-name">Grupo ABR</div><div class="brand-caption">Relacionamento</div></div></div>
       <div class="nav-caption">Área de trabalho</div>
       <button class="active" title="Funil de vendas" id="navBoard" aria-label="Funil de vendas" aria-pressed="true"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="8" height="7" rx="1.5"/><rect x="14" y="4" width="7" height="4" rx="1.5"/><rect x="14" y="11" width="7" height="9" rx="1.5"/><rect x="3" y="14" width="8" height="6" rx="1.5"/></svg></span><span class="nav-label">Funil de vendas</span></button>
+      <button title="Clientes" id="navCustomers" aria-label="Clientes" aria-pressed="false"><span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 19a6 6 0 0 1 12 0M14 15a5 5 0 0 1 7 4"/></svg></span><span class="nav-label">Clientes</span></button>
+      <button title="Vendas" id="navSales" aria-label="Vendas" aria-pressed="false"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M22 19V3"/><path d="M2 19h21"/></svg></span><span class="nav-label">Vendas</span></button>
       <button title="Equipe e rotas" id="navAdmin" aria-label="Equipe e rotas" aria-pressed="false"><span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 5.5a3 3 0 0 1 0 5.8M17 14a4.7 4.7 0 0 1 3.5 4.5"/></svg></span><span class="nav-label">Equipe e rotas</span></button>
       <button title="Meu perfil" id="navProfile" aria-label="Meu perfil" aria-pressed="false"><span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/><path d="M18.5 5.5l1.5-1.5M20 8h2M17.8 10.8l1.4 1.4"/></svg></span><span class="nav-label">Meu perfil</span></button>
       <div class="rail-spacer"></div>
@@ -82,6 +85,14 @@
       <section class="kpis" id="kpis" aria-label="Indicadores do CRM"></section>
       <section class="reactivationAlerts" id="reactivationAlerts" aria-live="polite" hidden></section>
       <section class="board view active" id="board" aria-label="Quadro de oportunidades"></section>
+      <section class="dataView view" id="customers" aria-label="Clientes">
+        <div class="dataSummary"><div><h2>Clientes</h2><p>Cadastro consolidado de clientes e histórico de fichas.</p></div><div class="summaryValue" id="customersTotal">0</div></div>
+        <div class="dataTableBox"><div class="tableScroll"><table><thead><tr><th>Código</th><th>Cliente</th><th>Telefone</th><th>Cidade/UF</th><th>Fichas</th><th>Última compra</th></tr></thead><tbody id="customerRows"></tbody></table></div></div>
+      </section>
+      <section class="dataView view" id="sales" aria-label="Vendas ganhas">
+        <div class="dataSummary"><div><h2>Vendas ganhas</h2><p>Somatório das oportunidades concluídas com valor e pedido registrados.</p></div><div><div class="muted">Valor total</div><div class="summaryValue" id="salesTotal">R$ 0,00</div></div></div>
+        <div class="dataTableBox"><div class="tableScroll"><table><thead><tr><th>Data</th><th>Pedido</th><th>Cliente</th><th>Protocolo</th><th>Responsável</th><th>Valor</th></tr></thead><tbody id="salesRows"></tbody></table></div></div>
+      </section>
       <section class="admin view" id="admin" aria-label="Equipe e rotas">
         <div class="adminIntro"><h2>Equipe e roteamento</h2><p>Cadastre colaboradores e defina quais atendimentos e regiões ficam com cada pessoa.</p></div>
         <div class="adminGrid">
@@ -160,7 +171,7 @@
       history.replaceState(null, '', location.pathname + location.hash);
     }
     const api = location.origin;
-    const state = { funnels: [], board: null, active: null, dragged: null, query: "", selected: null, sellers: [], profile: null, authToken: "", user: null, authRevision: 0, searchRevision: 0, customerImportToken: "" };
+    const state = { funnels: [], board: null, active: null, dragged: null, query: "", selected: null, sellers: [], customers: [], sales: [], profile: null, authToken: "", user: null, authRevision: 0, searchRevision: 0, customerImportToken: "" };
     const $ = (id) => document.getElementById(id);
     const say = (m) => { const el = $('status'); el.textContent = m; el.dataset.state = String(m).startsWith('Erro:') ? 'error' : 'ok'; };
     async function json(path, opts) {
@@ -189,10 +200,14 @@
       state.query = '';
       state.selected = null;
       state.sellers = [];
+      state.customers = [];
+      state.sales = [];
       state.profile = null;
       $('board').innerHTML = '';
       $('kpis').innerHTML = '';
       $('sellerRows').innerHTML = '';
+      $('customerRows').innerHTML = '';
+      $('salesRows').innerHTML = '';
       $('drawerBody').innerHTML = '';
       $('search').value = '';
       if ($('drawer').open) closeDrawer();
@@ -282,6 +297,14 @@
         el.addEventListener('click', () => openCard(findCard(el.dataset.caseId)));
         el.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); openCard(findCard(el.dataset.caseId)); } });
       });
+      document.querySelectorAll('.cardDelete').forEach(button => {
+        button.addEventListener('click', event => {
+          event.preventDefault();
+          event.stopPropagation();
+          deleteCard(button.dataset.deleteCase);
+        });
+        button.addEventListener('keydown', event => event.stopPropagation());
+      });
       document.querySelectorAll('.cards').forEach(zone => {
         zone.addEventListener('dragover', ev => { ev.preventDefault(); zone.classList.add('dragover'); });
         zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
@@ -295,23 +318,33 @@
     }
     function showView(name) {
       $('board').classList.toggle('active', name === 'board');
+      $('customers').classList.toggle('active', name === 'customers');
+      $('sales').classList.toggle('active', name === 'sales');
       $('admin').classList.toggle('active', name === 'admin');
       $('profile').classList.toggle('active', name === 'profile');
       $('navBoard').classList.toggle('active', name === 'board');
+      $('navCustomers').classList.toggle('active', name === 'customers');
+      $('navSales').classList.toggle('active', name === 'sales');
       $('navAdmin').classList.toggle('active', name === 'admin');
       $('navProfile').classList.toggle('active', name === 'profile');
       $('navBoard').setAttribute('aria-pressed', String(name === 'board'));
+      $('navCustomers').setAttribute('aria-pressed', String(name === 'customers'));
+      $('navSales').setAttribute('aria-pressed', String(name === 'sales'));
       $('navAdmin').setAttribute('aria-pressed', String(name === 'admin'));
       $('navProfile').setAttribute('aria-pressed', String(name === 'profile'));
-      document.querySelector('.page-title h1').textContent = name === 'board' ? 'Funil de vendas' : name === 'profile' ? 'Meu perfil' : 'Equipe e roteamento';
-      document.querySelector('.page-title .sub').textContent = name === 'board' ? 'Visão geral dos leads e das oportunidades em andamento' : name === 'profile' ? 'Dados de atendimento, WhatsApp e rota vinculados ao operador' : 'Colaboradores, especialidades e distribuição regional do atendimento';
+      const titles = { board: ['Funil de vendas','Visão geral dos leads e das oportunidades em andamento'], customers: ['Clientes','Cadastro consolidado e histórico comercial'], sales: ['Vendas','Resultados das oportunidades ganhas'], profile: ['Meu perfil','Dados de atendimento, WhatsApp e rota vinculados ao operador'], admin: ['Equipe e roteamento','Colaboradores, especialidades e distribuição regional do atendimento'] };
+      document.querySelector('.page-title h1').textContent = titles[name][0];
+      document.querySelector('.page-title .sub').textContent = titles[name][1];
       if (name === 'admin') loadSellers().catch(err => say('Erro: ' + err.message));
       if (name === 'profile') loadProfile().catch(err => say('Erro: ' + err.message));
+      if (name === 'customers') loadCustomers().catch(err => say('Erro ao carregar clientes: ' + err.message));
+      if (name === 'sales') loadSales().catch(err => say('Erro ao carregar vendas: ' + err.message));
     }
     function renderCard(card) {
       const name = card.contact?.name || card.contact?.phone || 'Lead sem nome';
       const f = card.fields || {};
       return `<article class="card" draggable="true" tabindex="0" role="button" aria-label="Abrir lead ${escapeHtml(name)}" data-case-id="${card.id}">
+        <button class="cardDelete" type="button" title="Apagar card" aria-label="Apagar card de ${escapeHtml(name)}" data-delete-case="${card.id}"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg></button>
         <b>${escapeHtml(name)}</b>
         <div class="line">${escapeHtml(card.protocol || '')} · ${escapeHtml(card.status || '')}</div>
         <div class="line">Vendedor: ${escapeHtml(card.owner?.name || 'Sem responsável')}</div>
@@ -319,6 +352,19 @@
         <div class="line">${escapeHtml(f.need || 'Sem resumo')}</div>
         <div class="tags"><span class="tag status">${escapeHtml(f.stage || 'Etapa')}</span><span class="tag hot">${escapeHtml(f.temperature || 'Temp.')}</span><span class="tag">${escapeHtml(f.potential || 'Potencial')}</span></div>
       </article>`;
+    }
+    async function deleteCard(caseId) {
+      const card = findCard(caseId);
+      const name = card?.contact?.name || card?.contact?.phone || 'este card';
+      if (!confirm(`Apagar ${name}? A ficha sairá do funil e dos relatórios ativos.`)) return;
+      try {
+        await json(`/v1/cases/${encodeURIComponent(caseId)}`, { method: 'DELETE' });
+        if (state.selected?.id === caseId) closeDrawer();
+        await Promise.all([loadBoard(), loadKpis(), loadReactivationAlerts()]);
+        say('Card apagado.');
+      } catch (err) {
+        say('Erro ao apagar o card: ' + err.message);
+      }
     }
     function findCard(id) {
       for (const col of state.board.columns) {
@@ -364,7 +410,8 @@
           ${editSelect('Origem', 'editSource', f.source, ['Não informado','Instagram','Facebook','LinkedIn','Google','Feiras/Eventos'])}
           ${editSelect('Potencial', 'editPotential', f.potential, ['low','medium','high','key_account'])}
           ${editSelect('Temperatura', 'editTemperature', f.temperature, ['hot','warm','cold'])}
-          ${editField('Valor estimado', 'editSaleValue', f.saleValue)}
+          ${editField('Valor do orçamento', 'editSaleValue', f.saleValue)}
+          ${editField('Número do pedido', 'editOrderNumber', f.orderNumber)}
           <div class="editField full"><label for="editNeed">Necessidade / resumo</label><textarea id="editNeed">${escapeHtml(f.need || '')}</textarea></div>
           <div class="editField full"><label>Funil e etapa atuais</label><div class="kv"><span>${escapeHtml(f.pipeline || '-')}</span><span>${escapeHtml(f.stage || '-')} · Responsável: ${escapeHtml(card.owner?.name || '-')}</span></div></div>
         </div>` +
@@ -373,7 +420,7 @@
        <div class="panel"><h2>Follow-up</h2><div class="row"><input id="taskTitle" placeholder="Tarefa"><input id="taskDue" type="datetime-local"></div><div class="actions"><button id="addTask">Agendar</button></div></div>
        <div class="panel"><h2>Nota interna</h2><textarea id="noteBody" placeholder="Nao vai para o WhatsApp"></textarea><div class="actions"><button id="addNote" class="secondary">Salvar nota</button></div></div>
        <div class="panel"><h2>Transferir</h2><div class="row"><input id="transferName" placeholder="Novo responsavel"><input id="transferPhone" placeholder="+5511999990001"></div><div class="actions"><button id="transferLead" class="secondary">Criar transferencia</button><button id="queueMessage" class="secondary">Preparar mensagem</button></div></div>
-       <div class="panel"><h2>Fechamento</h2><div class="row"><input id="saleValue" placeholder="Valor venda"><select id="lossReason"><option>Preco</option><option>Disponibilidade de Estoque</option><option>Condicao de Pagamento</option><option>Logistica</option><option>Outro</option></select></div><input id="lossDetail" placeholder="Detalhe perda, se houver" style="width:100%;margin-top:8px"><div class="actions"><button id="markWon">Venda ganha</button><button id="markLost" class="danger">Venda perdida</button></div></div>`
+       <div class="panel"><h2>Fechamento</h2><p class="muted">Para registrar uma venda ganha, informe obrigatoriamente o valor e o número do pedido. Vendas perdidas seguem automaticamente para o funil de reativação.</p><div class="row"><input id="saleValue" inputmode="decimal" value="${escapeHtml(f.saleValue == null ? '' : f.saleValue)}" placeholder="Valor do orçamento"><input id="orderNumber" value="${escapeHtml(f.orderNumber || '')}" placeholder="Número do pedido"></div><div class="row" style="margin-top:8px"><select id="lossReason"><option>Preco</option><option>Disponibilidade de Estoque</option><option>Condicao de Pagamento</option><option>Logistica</option><option>Outro</option></select><input id="lossDetail" placeholder="Detalhe da perda"></div><div class="actions"><button id="markWon">Venda ganha</button><button id="markLost" class="danger">Venda perdida</button></div></div>`
       ].join('');
       if (!$('drawer').open) $('drawer').showModal();
       $('addTask').onclick = addTask;
@@ -384,6 +431,27 @@
       $('queueMessage').onclick = queueMessage;
       $('markWon').onclick = () => closeLead('won');
       $('markLost').onclick = () => closeLead('lost');
+      $('editSaleValue').oninput = () => { $('saleValue').value = $('editSaleValue').value; };
+      $('editOrderNumber').oninput = () => { $('orderNumber').value = $('editOrderNumber').value; };
+      $('saleValue').oninput = () => { $('editSaleValue').value = $('saleValue').value; };
+      $('orderNumber').oninput = () => { $('editOrderNumber').value = $('orderNumber').value; };
+    }
+    function editableCasePayload() {
+      return {
+        name: $('editName').value.trim(),
+        phone: $('editPhone').value.trim(),
+        company: $('editCompany').value.trim(),
+        city: $('editCity').value.trim(),
+        uf: $('editUf').value.trim().toUpperCase(),
+        segment: $('editSegment').value,
+        department: $('editDepartment').value,
+        source: $('editSource').value,
+        potential: ({ low: 'Baixo', medium: 'Medio', high: 'Alto', key_account: 'Conta-chave' })[$('editPotential').value] || $('editPotential').value,
+        temperature: ({ hot: 'Quente', warm: 'Morno', cold: 'Frio' })[$('editTemperature').value] || $('editTemperature').value,
+        saleValue: $('editSaleValue').value.trim(),
+        orderNumber: $('editOrderNumber').value.trim(),
+        need: $('editNeed').value.trim()
+      };
     }
     async function saveCase() {
       if (!state.selected) return;
@@ -393,20 +461,7 @@
       try {
         const result = await json(`/v1/cases/${encodeURIComponent(state.selected.id)}`, {
           method: 'PATCH',
-          body: JSON.stringify({
-            name: $('editName').value.trim(),
-            phone: $('editPhone').value.trim(),
-            company: $('editCompany').value.trim(),
-            city: $('editCity').value.trim(),
-            uf: $('editUf').value.trim().toUpperCase(),
-            segment: $('editSegment').value,
-            department: $('editDepartment').value,
-            source: $('editSource').value,
-            potential: ({ low: 'Baixo', medium: 'Medio', high: 'Alto', key_account: 'Conta-chave' })[$('editPotential').value] || $('editPotential').value,
-            temperature: ({ hot: 'Quente', warm: 'Morno', cold: 'Frio' })[$('editTemperature').value] || $('editTemperature').value,
-            saleValue: $('editSaleValue').value.trim(),
-            need: $('editNeed').value.trim()
-          })
+          body: JSON.stringify(editableCasePayload())
         });
         state.selected = result.case;
         closeDrawer();
@@ -424,21 +479,38 @@
     }
     async function moveCard(caseId, stageId) {
       say('Movendo lead...');
-      await json(`/v1/cases/${encodeURIComponent(caseId)}/stage`, { method: 'POST', body: JSON.stringify({ stageId }) });
-      const destination = state.funnels.find(funnel => (funnel.stages || []).some(stage => stage.id === stageId));
-      if (destination && destination.id !== state.active) {
-        state.active = destination.id;
-        renderFunnels();
+      try {
+        const result = await json(`/v1/cases/${encodeURIComponent(caseId)}/stage`, { method: 'POST', body: JSON.stringify({ stageId }) });
+        const destination = state.funnels.find(funnel => funnel.name === result.case?.fields?.pipeline) || state.funnels.find(funnel => (funnel.stages || []).some(stage => stage.id === stageId));
+        if (destination && destination.id !== state.active) {
+          state.active = destination.id;
+          renderFunnels();
+        }
+        await Promise.all([loadBoard(), loadKpis()]);
+        say(result.case?.lost_at ? 'Venda perdida enviada ao funil de reativação.' : 'Lead movido.');
+        return true;
+      } catch (err) {
+        const messages = { won_sale_value_required: 'Informe o valor do orçamento antes de marcar como venda ganha.', won_order_number_required: 'Informe o número do pedido antes de marcar como venda ganha.' };
+        say('Erro: ' + (messages[err.message] || err.message));
+        return false;
       }
-      await loadBoard();
-      say('Lead movido.');
     }
     async function moveSelectedStage() {
       if (!state.selected) return;
-      await moveCard(state.selected.id, $('moveStage').value);
-      closeDrawer();
-      await loadKpis();
-      say('Ficha movida; vendedor e histórico preservados.');
+      const stageId = $('moveStage').value;
+      const target = state.funnels.flatMap(funnel => funnel.stages || []).find(stage => stage.id === stageId);
+      if (target?.name === 'Venda ganha') {
+        const payload = editableCasePayload();
+        if (!(Number(payload.saleValue.replace(',', '.')) > 0)) return say('Erro: informe o valor do orçamento antes de concluir a venda.');
+        if (!payload.orderNumber) return say('Erro: informe o número do pedido antes de concluir a venda.');
+        try {
+          await json(`/v1/cases/${encodeURIComponent(state.selected.id)}`, { method: 'PATCH', body: JSON.stringify(payload) });
+        } catch (err) {
+          return say('Erro ao salvar os dados da venda: ' + err.message);
+        }
+      }
+      const moved = await moveCard(state.selected.id, stageId);
+      if (moved) closeDrawer();
     }
     async function recordCustomerContact() {
       if (!state.selected) return;
@@ -475,11 +547,21 @@
     }
     async function closeLead(outcome) {
       if (!state.selected) return;
-      await json(`/v1/cases/${encodeURIComponent(state.selected.id)}/close`, { method: 'POST', body: JSON.stringify({ outcome, saleValue: $('saleValue').value || null, lossReason: $('lossReason').value, lossDetail: $('lossDetail').value }) });
-      closeDrawer();
-      await loadBoard();
-      await loadKpis();
-      say(outcome === 'won' ? 'Venda ganha registrada.' : 'Venda perdida registrada.');
+      const saleValue = $('saleValue').value.trim();
+      const orderNumber = $('orderNumber').value.trim();
+      if (outcome === 'won' && !(Number(saleValue.replace(',', '.')) > 0)) return say('Erro: informe o valor do orçamento antes de concluir a venda.');
+      if (outcome === 'won' && !orderNumber) return say('Erro: informe o número do pedido antes de concluir a venda.');
+      try {
+        const result = await json(`/v1/cases/${encodeURIComponent(state.selected.id)}/close`, { method: 'POST', body: JSON.stringify({ outcome, saleValue: saleValue || null, orderNumber, lossReason: $('lossReason').value, lossDetail: $('lossDetail').value }) });
+        closeDrawer();
+        const destination = state.funnels.find(funnel => funnel.name === result.case?.fields?.pipeline);
+        if (destination) { state.active = destination.id; renderFunnels(); }
+        await Promise.all([loadBoard(), loadKpis()]);
+        say(outcome === 'won' ? 'Venda ganha registrada.' : 'Venda perdida enviada ao funil de reativação.');
+      } catch (err) {
+        const messages = { won_sale_value_required: 'Informe o valor do orçamento.', won_order_number_required: 'Informe o número do pedido.' };
+        say('Erro: ' + (messages[err.message] || err.message));
+      }
     }
     async function loadKpis() {
       if (!state.active) return;
@@ -774,6 +856,21 @@
     function escapeHtml(s) {
       return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
+    function formatMoney(value) {
+      return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0));
+    }
+    async function loadCustomers() {
+      const data = await json('/v1/customers/table');
+      state.customers = data.items || [];
+      $('customersTotal').textContent = String(data.total || 0);
+      $('customerRows').innerHTML = state.customers.map(customer => `<tr><td>${escapeHtml(customer.customer_code || '-')}</td><td><b>${escapeHtml(customer.name || 'Cliente sem nome')}</b></td><td>${escapeHtml(customer.phone || '-')}</td><td>${escapeHtml(customer.city || '-')}${customer.uf ? '/' + escapeHtml(customer.uf) : ''}</td><td>${escapeHtml(customer.case_count || 0)}</td><td>${escapeHtml(customer.last_purchase_at ? new Date(customer.last_purchase_at).toLocaleDateString('pt-BR') : '-')}</td></tr>`).join('') || '<tr><td colspan="6" class="emptyTable">Nenhum cliente cadastrado.</td></tr>';
+    }
+    async function loadSales() {
+      const data = await json('/v1/reports/sales');
+      state.sales = data.items || [];
+      $('salesTotal').textContent = formatMoney(data.totalValue);
+      $('salesRows').innerHTML = state.sales.map(card => `<tr><td>${escapeHtml(card.won_at ? new Date(card.won_at).toLocaleDateString('pt-BR') : '-')}</td><td><b>${escapeHtml(card.fields?.orderNumber || '-')}</b></td><td>${escapeHtml(card.contact?.name || card.contact?.phone || '-')}</td><td>${escapeHtml(card.protocol || '-')}</td><td>${escapeHtml(card.owner?.name || '-')}</td><td>${escapeHtml(formatMoney(card.fields?.saleValue))}</td></tr>`).join('') || '<tr><td colspan="6" class="emptyTable">Nenhuma venda ganha registrada.</td></tr>';
+    }
     $('funnel').onchange = async () => { state.active = $('funnel').value; await loadBoard(); await loadKpis(); };
     $('refresh').onclick = async () => { await loadFunnels(); await loadBoard(); await loadKpis(); };
     $('railRefresh').onclick = $('refresh').onclick;
@@ -788,6 +885,8 @@
       }
     }, 60000);
     $('navBoard').onclick = () => showView('board');
+    $('navCustomers').onclick = () => showView('customers');
+    $('navSales').onclick = () => showView('sales');
     $('navAdmin').onclick = () => showView('admin');
     $('navProfile').onclick = () => showView('profile');
     $('exportBtn').onclick = async () => {

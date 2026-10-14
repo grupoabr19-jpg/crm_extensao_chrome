@@ -10,8 +10,10 @@ const fails = async (s: string, p: unknown[] = []) => { try { await db.query(s, 
 beforeAll(async () => {
   db = new PGlite();
   await db.exec(sql("0001_core.sql"));
+  await db.exec(sql("0002_crm_operations.sql"));
   await db.exec(sql("0005_customer_registry.sql"));
   await db.exec(sql("0008_customer_lookup_indexes.sql"));
+  await db.exec(sql("0013_sales_workflow.sql"));
   org = (await q("insert into organizations(name) values('ABR teste') returning id"))[0].id;
   await db.exec(sql("seed_reference_demo.sql").replaceAll(":'org_id'", `'${org}'`));
 }, 60_000);
@@ -55,6 +57,12 @@ describe("migration 0001 em PostgreSQL real (PGlite)", () => {
     const a = (await q("insert into whatsapp_accounts(organization_id,e164,label,kind) values($1,'+5511900000001','A','employee') returning id", [org]))[0].id;
     await db.query("insert into user_account_bindings(organization_id,user_id,account_id,verified_at) values($1,$2,$3,now())", [org, u, a]);
     expect(await fails("insert into user_account_bindings(organization_id,user_id,account_id) values($1,$2,$3)", [org, u, a])).toBe(true);
+  });
+  it("permite exclusão recuperável e indexa somente fichas ativas", async () => {
+    const columns = await q("select column_name from information_schema.columns where table_name='cases' and column_name='deleted_at'");
+    expect(columns).toHaveLength(1);
+    const indexes = await q("select indexname from pg_indexes where indexname in ('cases_active_pipeline_stage','cases_won_sales') order by indexname");
+    expect(indexes.map((row) => row.indexname)).toEqual(["cases_active_pipeline_stage", "cases_won_sales"]);
   });
   it("outbox: estado 'uncertain' exige execução iniciada; override manual exige motivo", async () => {
     const u = (await q("select id from users limit 1"))[0].id;
