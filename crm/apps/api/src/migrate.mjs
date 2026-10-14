@@ -80,6 +80,9 @@ try {
   await applyMigration("0013_sales_workflow", async () => {
     await client.query(readFileSync(resolve(migrationsDir, "0013_sales_workflow.sql"), "utf8"));
   });
+  await applyMigration("0014_operator_transfer_profiles", async () => {
+    await client.query(readFileSync(resolve(migrationsDir, "0014_operator_transfer_profiles.sql"), "utf8"));
+  });
   await client.query("commit");
   console.log("Migrations concluidas.");
 } catch (err) {

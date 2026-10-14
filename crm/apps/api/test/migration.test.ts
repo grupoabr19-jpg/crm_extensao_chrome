@@ -11,10 +11,12 @@ beforeAll(async () => {
   db = new PGlite();
   await db.exec(sql("0001_core.sql"));
   await db.exec(sql("0002_crm_operations.sql"));
+  await db.exec(sql("0003_sellers_routes.sql"));
   await db.exec(sql("0005_customer_registry.sql"));
   await db.exec(sql("0008_customer_lookup_indexes.sql"));
   await db.exec(sql("0013_sales_workflow.sql"));
   org = (await q("insert into organizations(name) values('ABR teste') returning id"))[0].id;
+  await db.exec(sql("0014_operator_transfer_profiles.sql"));
   await db.exec(sql("seed_reference_demo.sql").replaceAll(":'org_id'", `'${org}'`));
 }, 60_000);
 
@@ -63,6 +65,14 @@ describe("migration 0001 em PostgreSQL real (PGlite)", () => {
     expect(columns).toHaveLength(1);
     const indexes = await q("select indexname from pg_indexes where indexname in ('cases_active_pipeline_stage','cases_won_sales') order by indexname");
     expect(indexes.map((row) => row.indexname)).toEqual(["cases_active_pipeline_stage", "cases_won_sales"]);
+  });
+  it("cadastra os operadores com WhatsApp e polo para transferencia", async () => {
+    const profiles = await q("select count(*)::int total from seller_profiles where organization_id=$1 and active=true and whatsapp_e164 is not null", [org]);
+    expect(profiles[0].total).toBe(28);
+    const leaders = await q("select u.display_name,sr.route_value from seller_profiles sp join users u on u.id=sp.user_id join seller_routes sr on sr.profile_id=sp.id where sp.organization_id=$1 and sp.sales_function='vendedor_externo' and sr.channel='varejo' and sr.route_type='region' order by sr.route_value", [org]);
+    expect(leaders).toHaveLength(8);
+    expect(leaders).toContainEqual(expect.objectContaining({ display_name: "Alessandro Takahashi", route_value: "BRAGANCA" }));
+    expect(leaders).toContainEqual(expect.objectContaining({ display_name: "Gustavo Alvarenga", route_value: "EXTREMA" }));
   });
   it("outbox: estado 'uncertain' exige execução iniciada; override manual exige motivo", async () => {
     const u = (await q("select id from users limit 1"))[0].id;
