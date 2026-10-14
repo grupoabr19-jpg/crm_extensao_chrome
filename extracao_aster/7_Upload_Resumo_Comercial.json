@@ -1,0 +1,211 @@
+{
+  "majorDimension": "ROWS",
+  "range": "'7_Upload Resumo Comercial'!A1:J1000",
+  "values": [
+    [
+      "Vendedor",
+      "Tipo",
+      "Região",
+      "Segmento",
+      "Peso total",
+      "Valor total",
+      "",
+      "CONTROLE DE CARGAS",
+      "RESUMO COMERCIAL / ASTER"
+    ],
+    [
+      "ATF - LARISSA TERRA",
+      "ATACADO",
+      "SP - CAPITAL",
+      "INTERNO",
+      "13.032,00",
+      "R$ 84.182,45",
+      "",
+      "Última carga",
+      "10/09/2026 07:19:51"
+    ],
+    [
+      "ATF - WILSON NETO",
+      "ATACADO",
+      "SP - CAPITAL",
+      "INTERNO",
+      "13.692,00",
+      "R$ 74.463,78",
+      "",
+      "Fonte",
+      "MANUAL"
+    ],
+    [
+      "VCORP - HELOA LEITE",
+      "VAREJO",
+      "BRAGANÇA PAULISTA",
+      "CORPORATIVO",
+      "2.304,16",
+      "R$ 23.697,50",
+      "",
+      "Data do saldo",
+      "09/09/2026"
+    ],
+    [
+      "VARE - LEIZ TORSO",
+      "VAREJO",
+      "BRAGANÇA PAULISTA",
+      "ESPECIALISTA",
+      "1.799,12",
+      "R$ 16.234,15",
+      "",
+      "Modo",
+      "date_balance"
+    ],
+    [
+      "VCORP - TAINARA MATILDE",
+      "VAREJO",
+      "EXTREMA",
+      "CORPORATIVO",
+      "12.666,52",
+      "R$ 69.307,74",
+      "",
+      "Situação",
+      "CARGA CONCLUÍDA; SALDO DA DATA SUBSTITUÍDO"
+    ],
+    [
+      "VARE - INAYARA CUNHA",
+      "VAREJO",
+      "EXTREMA",
+      "ESPECIALISTA",
+      "2.838,35",
+      "R$ 24.463,24",
+      "",
+      "Arquivo",
+      "Resumo Comercial (6).csv"
+    ],
+    [
+      "VCORP - JESSICA SANTOS",
+      "VAREJO",
+      "ITAJUBÁ",
+      "CORPORATIVO",
+      "1.341,40",
+      "R$ 7.758,25",
+      "",
+      "Peso do dia (kg)",
+      "56.523,75"
+    ],
+    [
+      "VARE - GABRIELA CUNHA",
+      "VAREJO",
+      "ITAJUBÁ",
+      "ESPECIALISTA",
+      "8.718,04",
+      "R$ 76.100,06",
+      "",
+      "Faturamento (R$)",
+      "R$ 424.216,11"
+    ],
+    [
+      "VCORP - KAYLANE SILVA",
+      "VAREJO",
+      "JUNDIAÍ",
+      "CORPORATIVO",
+      "347,34",
+      "R$ 1.970,40"
+    ],
+    [
+      "VARE - JOSIANE LIMA",
+      "VAREJO",
+      "JUNDIAÍ",
+      "ESPECIALISTA",
+      "300,60",
+      "R$ 2.494,62"
+    ],
+    [
+      "VARC - ARIANE SOUZA",
+      "VAREJO",
+      "MICRO-REGIÃO",
+      "CONSTRUÇÃO CIVIL",
+      "3.129,18",
+      "R$ 17.173,81"
+    ],
+    [
+      "VCORP - MATHEUS TEIXEIRA",
+      "VAREJO",
+      "MICRO-REGIÃO",
+      "CORPORATIVO",
+      "5.181,16",
+      "R$ 39.665,00"
+    ],
+    [
+      "VARE - EDMILA MELO",
+      "VAREJO",
+      "MICRO-REGIÃO",
+      "ESPECIALISTA",
+      "4.705,22",
+      "R$ 36.911,43"
+    ],
+    [
+      "VCORP - CAMILA GUIMENTI",
+      "VAREJO",
+      "POCOS CALDAS",
+      "CORPORATIVO",
+      "4.747,60",
+      "R$ 31.345,58",
+      "",
+      "COMO USAR",
+      "O botão/menu abre o explorador de arquivos."
+    ],
+    [
+      "VARE - MILENA VAZ",
+      "VAREJO",
+      "POCOS CALDAS",
+      "ESPECIALISTA",
+      "1.276,24",
+      "R$ 10.958,41",
+      "",
+      "1",
+      "Clique em UPLOAD DE RESUMO COMERCIAL."
+    ],
+    [
+      "VCORP - VITORIA TAVARES",
+      "VAREJO",
+      "POUSO ALEGRE",
+      "CORPORATIVO",
+      "256,23",
+      "R$ 2.514,95",
+      "",
+      "2",
+      "Informe a data a que o saldo do arquivo pertence."
+    ],
+    [
+      "VARE - RAFAELA RESENDE",
+      "VAREJO",
+      "POUSO ALEGRE",
+      "ESPECIALISTA",
+      "2.580,41",
+      "R$ 20.127,32",
+      "",
+      "3",
+      "Selecione o CSV Resumo Comercial referente àquela data."
+    ],
+    [
+      "VCORP - THAIS OLIVEIRA",
+      "VAREJO",
+      "VARGINHA",
+      "CORPORATIVO",
+      "2.886,00",
+      "R$ 26.480,00",
+      "",
+      "4",
+      "Clique em Enviar e substituir o saldo da data."
+    ],
+    [
+      "VARE - BRUNA PEREIRA",
+      "VAREJO",
+      "VARGINHA",
+      "ESPECIALISTA",
+      "1.446,18",
+      "R$ 17.013,65",
+      "",
+      "5",
+      "Se a data já existir, somente essa data será substituída."
+    ]
+  ]
+}

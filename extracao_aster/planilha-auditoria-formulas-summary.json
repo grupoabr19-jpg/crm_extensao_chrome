@@ -1,0 +1,769 @@
+[
+  {
+    "title": "1_Lançamentos Diários",
+    "status": "ok",
+    "file": "/home/ubuntu/planilha-auditoria-grid/1_Lan_amentos_Di_rios.json",
+    "formula_count": 2016,
+    "error_count": 0,
+    "formula_sample": [
+      {
+        "row": 2,
+        "col": 5,
+        "formula": "=IF(B2=\"\";\"\";IFERROR(INDEX(FILTER('4_Metas'!$B$2:$B$1000;'4_Metas'!$E$2:$E$1000=B2;'4_Metas'!$A$2:$A$1000=DATE(YEAR(A2);MONTH(A2);1));1);\"\"))"
+      },
+      {
+        "row": 3,
+        "col": 5,
+        "formula": "=IF(B3=\"\";\"\";IFERROR(INDEX(FILTER('4_Metas'!$B$2:$B$1000;'4_Metas'!$E$2:$E$1000=B3;'4_Metas'!$A$2:$A$1000=DATE(YEAR(A3);MONTH(A3);1));1);\"\"))"
+      },
+      {
+        "row": 4,
+        "col": 5,
+        "formula": "=IF(B4=\"\";\"\";IFERROR(INDEX(FILTER('4_Metas'!$B$2:$B$1000;'4_Metas'!$E$2:$E$1000=B4;'4_Metas'!$A$2:$A$1000=DATE(YEAR(A4);MONTH(A4);1));1);\"\"))"
+      },
+      {
+        "row": 5,
+        "col": 5,
+        "formula": "=IF(B5=\"\";\"\";IFERROR(INDEX(FILTER('4_Metas'!$B$2:$B$1000;'4_Metas'!$E$2:$E$1000=B5;'4_Metas'!$A$2:$A$1000=DATE(YEAR(A5);MONTH(A5);1));1);\"\"))"
+      },
+      {
+        "row": 6,
+        "col": 5,
+        "formula": "=IF(B6=\"\";\"\";IFERROR(INDEX(FILTER('4_Metas'!$B$2:$B$1000;'4_Metas'!$E$2:$E$1000=B6;'4_Metas'!$A$2:$A$1000=DATE(YEAR(A6);MONTH(A6);1));1);\"\"))"
+      },
+      {
+        "row": 7,
+        "col": 5,
+        "formula": "=IF(B7=\"\";\"\";IFERROR(INDEX(FILTER('4_Metas'!$B$2:$B$1000;'4_Metas'!$E$2:$E$1000=B7;'4_Metas'!$A$2:$A$1000=DATE(YEAR(A7);MONTH(A7);1));1);\"\"))"
+      },
+      {
+        "row": 8,
+        "col": 5,
+        "formula": "=IF(B8=\"\";\"\";IFERROR(INDEX(FILTER('4_Metas'!$B$2:$B$1000;'4_Metas'!$E$2:$E$1000=B8;'4_Metas'!$A$2:$A$1000=DATE(YEAR(A8);MONTH(A8);1));1);\"\"))"
+      },
+      {
+        "row": 9,
+        "col": 5,
+        "formula": "=IF(B9=\"\";\"\";IFERROR(INDEX(FILTER('4_Metas'!$B$2:$B$1000;'4_Metas'!$E$2:$E$1000=B9;'4_Metas'!$A$2:$A$1000=DATE(YEAR(A9);MONTH(A9);1));1);\"\"))"
+      },
+      {
+        "row": 10,
+        "col": 5,
+        "formula": "=IF(B10=\"\";\"\";IFERROR(INDEX(FILTER('4_Metas'!$B$2:$B$1000;'4_Metas'!$E$2:$E$1000=B10;'4_Metas'!$A$2:$A$1000=DATE(YEAR(A10);MONTH(A10);1));1);\"\"))"
+      },
+      {
+        "row": 11,
+        "col": 5,
+        "formula": "=IF(B11=\"\";\"\";IFERROR(INDEX(FILTER('4_Metas'!$B$2:$B$1000;'4_Metas'!$E$2:$E$1000=B11;'4_Metas'!$A$2:$A$1000=DATE(YEAR(A11);MONTH(A11);1));1);\"\"))"
+      },
+      {
+        "row": 12,
+        "col": 5,
+        "formula": "=IF(B12=\"\";\"\";IFERROR(INDEX(FILTER('4_Metas'!$B$2:$B$1000;'4_Metas'!$E$2:$E$1000=B12;'4_Metas'!$A$2:$A$1000=DATE(YEAR(A12);MONTH(A12);1));1);\"\"))"
+      },
+      {
+        "row": 13,
+        "col": 5,
+        "formula": "=IF(B13=\"\";\"\";IFERROR(INDEX(FILTER('4_Metas'!$B$2:$B$1000;'4_Metas'!$E$2:$E$1000=B13;'4_Metas'!$A$2:$A$1000=DATE(YEAR(A13);MONTH(A13);1));1);\"\"))"
+      },
+      {
+        "row": 14,
+        "col": 5,
+        "formula": "=IF(B14=\"\";\"\";IFERROR(INDEX(FILTER('4_Metas'!$B$2:$B$1000;'4_Metas'!$E$2:$E$1000=B14;'4_Metas'!$A$2:$A$1000=DATE(YEAR(A14);MONTH(A14);1));1);\"\"))"
+      },
+      {
+        "row": 15,
+        "col": 5,
+        "formula": "=IF(B15=\"\";\"\";IFERROR(INDEX(FILTER('4_Metas'!$B$2:$B$1000;'4_Metas'!$E$2:$E$1000=B15;'4_Metas'!$A$2:$A$1000=DATE(YEAR(A15);MONTH(A15);1));1);\"\"))"
+      },
+      {
+        "row": 16,
+        "col": 5,
+        "formula": "=IF(B16=\"\";\"\";IFERROR(INDEX(FILTER('4_Metas'!$B$2:$B$1000;'4_Metas'!$E$2:$E$1000=B16;'4_Metas'!$A$2:$A$1000=DATE(YEAR(A16);MONTH(A16);1));1);\"\"))"
+      },
+      {
+        "row": 17,
+        "col": 5,
+        "formula": "=IF(B17=\"\";\"\";IFERROR(INDEX(FILTER('4_Metas'!$B$2:$B$1000;'4_Metas'!$E$2:$E$1000=B17;'4_Metas'!$A$2:$A$1000=DATE(YEAR(A17);MONTH(A17);1));1);\"\"))"
+      },
+      {
+        "row": 18,
+        "col": 5,
+        "formula": "=IF(B18=\"\";\"\";IFERROR(INDEX(FILTER('4_Metas'!$B$2:$B$1000;'4_Metas'!$E$2:$E$1000=B18;'4_Metas'!$A$2:$A$1000=DATE(YEAR(A18);MONTH(A18);1));1);\"\"))"
+      },
+      {
+        "row": 19,
+        "col": 5,
+        "formula": "=IF(B19=\"\";\"\";IFERROR(INDEX(FILTER('4_Metas'!$B$2:$B$1000;'4_Metas'!$E$2:$E$1000=B19;'4_Metas'!$A$2:$A$1000=DATE(YEAR(A19);MONTH(A19);1));1);\"\"))"
+      },
+      {
+        "row": 20,
+        "col": 5,
+        "formula": "=IF(B20=\"\";\"\";IFERROR(INDEX(FILTER('4_Metas'!$B$2:$B$1000;'4_Metas'!$E$2:$E$1000=B20;'4_Metas'!$A$2:$A$1000=DATE(YEAR(A20);MONTH(A20);1));1);\"\"))"
+      },
+      {
+        "row": 21,
+        "col": 5,
+        "formula": "=IF(B21=\"\";\"\";IFERROR(INDEX(FILTER('4_Metas'!$B$2:$B$1000;'4_Metas'!$E$2:$E$1000=B21;'4_Metas'!$A$2:$A$1000=DATE(YEAR(A21);MONTH(A21);1));1);\"\"))"
+      }
+    ],
+    "error_sample": []
+  },
+  {
+    "title": "2_Totais",
+    "status": "ok",
+    "file": "/home/ubuntu/planilha-auditoria-grid/2_Totais.json",
+    "formula_count": 21,
+    "error_count": 0,
+    "formula_sample": [
+      {
+        "row": 2,
+        "col": 2,
+        "formula": "='5_Configurações'!B2"
+      },
+      {
+        "row": 2,
+        "col": 5,
+        "formula": "='5_Configurações'!B3"
+      },
+      {
+        "row": 2,
+        "col": 8,
+        "formula": "=B10"
+      },
+      {
+        "row": 5,
+        "col": 1,
+        "formula": "=$C$10"
+      },
+      {
+        "row": 5,
+        "col": 4,
+        "formula": "=IF(COUNT('1_Lançamentos Diários'!$C$2:$C$2000)=0;\"Aguardando integração\";IF(COUNT('1_Lançamentos Diários'!$F$2:$F$2000)<COUNT('1_Lançamentos Diários'!$C$2:$C$2000);\"Faturamento incompleto\";SUMIFS('1_Lançamentos Diários'!$F$2:$F$2000;'1_Lançamentos Diários'!$A$2:$A$2000;\">=\"&'5_Configurações'!$B$3;'1_Lançamentos Diários'!$A$2:$A$2000;\"<\"&EDATE('5_Configurações'!$B$3;1))))"
+      },
+      {
+        "row": 5,
+        "col": 7,
+        "formula": "=$D$10"
+      },
+      {
+        "row": 5,
+        "col": 10,
+        "formula": "=$E$10"
+      },
+      {
+        "row": 10,
+        "col": 2,
+        "formula": "=SUMIFS('4_Metas'!$F$2:$F$1000;'4_Metas'!$A$2:$A$1000;'5_Configurações'!$B$3)/1000"
+      },
+      {
+        "row": 10,
+        "col": 3,
+        "formula": "=SUMIFS('1_Lançamentos Diários'!$C$2:$C$2000;'1_Lançamentos Diários'!$A$2:$A$2000;\">=\"&'5_Configurações'!$B$3;'1_Lançamentos Diários'!$A$2:$A$2000;\"<\"&EDATE('5_Configurações'!$B$3;1))/1000"
+      },
+      {
+        "row": 10,
+        "col": 4,
+        "formula": "=IFERROR(C10/B10;0)"
+      },
+      {
+        "row": 10,
+        "col": 5,
+        "formula": "=MAX(B10-C10;0)"
+      },
+      {
+        "row": 11,
+        "col": 2,
+        "formula": "=$B$10*(1+'5_Configurações'!$B$7)"
+      },
+      {
+        "row": 11,
+        "col": 3,
+        "formula": "=$C$10"
+      },
+      {
+        "row": 11,
+        "col": 4,
+        "formula": "=IFERROR(C11/B11;0)"
+      },
+      {
+        "row": 11,
+        "col": 5,
+        "formula": "=MAX(B11-C11;0)"
+      },
+      {
+        "row": 11,
+        "col": 6,
+        "formula": "='5_Configurações'!$B$7"
+      },
+      {
+        "row": 12,
+        "col": 2,
+        "formula": "=$B$10*(1+'5_Configurações'!$B$8)"
+      },
+      {
+        "row": 12,
+        "col": 3,
+        "formula": "=$C$10"
+      },
+      {
+        "row": 12,
+        "col": 4,
+        "formula": "=IFERROR(C12/B12;0)"
+      },
+      {
+        "row": 12,
+        "col": 5,
+        "formula": "=MAX(B12-C12;0)"
+      }
+    ],
+    "error_sample": []
+  },
+  {
+    "title": "_Snapshots Acumulados",
+    "status": "ok",
+    "file": "/home/ubuntu/planilha-auditoria-grid/Snapshots_Acumulados.json",
+    "formula_count": 0,
+    "error_count": 0,
+    "formula_sample": [],
+    "error_sample": []
+  },
+  {
+    "title": "_Historico de Cargas",
+    "status": "ok",
+    "file": "/home/ubuntu/planilha-auditoria-grid/Historico_de_Cargas.json",
+    "formula_count": 0,
+    "error_count": 0,
+    "formula_sample": [],
+    "error_sample": []
+  },
+  {
+    "title": "2_Ranking por Vendedor",
+    "status": "ok",
+    "file": "/home/ubuntu/planilha-auditoria-grid/2_Ranking_por_Vendedor.json",
+    "formula_count": 914,
+    "error_count": 0,
+    "formula_sample": [
+      {
+        "row": 2,
+        "col": 2,
+        "formula": "=IF(COUNTA('1_Lançamentos Diários'!$A$2:$A$2000)=0;TODAY();MAX('1_Lançamentos Diários'!$A$2:$A$2000))"
+      },
+      {
+        "row": 2,
+        "col": 5,
+        "formula": "=DATE(YEAR($B$2);MONTH($B$2);1)"
+      },
+      {
+        "row": 3,
+        "col": 2,
+        "formula": "=SUM($T$6:$T$105)"
+      },
+      {
+        "row": 3,
+        "col": 5,
+        "formula": "=SUM($V$6:$V$105)"
+      },
+      {
+        "row": 3,
+        "col": 8,
+        "formula": "=SUM($X$6:$X$105)"
+      },
+      {
+        "row": 3,
+        "col": 11,
+        "formula": "=IFERROR($H$3/$B$3;0)"
+      },
+      {
+        "row": 3,
+        "col": 16,
+        "formula": "=IFERROR(SUM($X$6:$X$105)/SUM($Z$6:$Z$105);0)"
+      },
+      {
+        "row": 6,
+        "col": 1,
+        "formula": "=ARRAYFORMULA(IF(B6:B105=\"\";\"\";ROW(B6:B105)-5))"
+      },
+      {
+        "row": 6,
+        "col": 2,
+        "formula": "=SORT(CHOOSECOLS(FILTER(Q6:AD105;Q6:Q105<>\"\");1;2;3;4;5;6;7;8;9;14);9;FALSE)"
+      },
+      {
+        "row": 6,
+        "col": 17,
+        "formula": "=FILTER('4_Metas'!$E$2:$E$1000;'4_Metas'!$A$2:$A$1000=$E$2;'4_Metas'!$E$2:$E$1000<>\"\")"
+      },
+      {
+        "row": 6,
+        "col": 18,
+        "formula": "=FILTER('4_Metas'!$B$2:$B$1000;'4_Metas'!$A$2:$A$1000=$E$2;'4_Metas'!$E$2:$E$1000<>\"\")"
+      },
+      {
+        "row": 6,
+        "col": 19,
+        "formula": "=FILTER('4_Metas'!$D$2:$D$1000;'4_Metas'!$A$2:$A$1000=$E$2;'4_Metas'!$E$2:$E$1000<>\"\")"
+      },
+      {
+        "row": 6,
+        "col": 20,
+        "formula": "=FILTER('4_Metas'!$F$2:$F$1000;'4_Metas'!$A$2:$A$1000=$E$2;'4_Metas'!$E$2:$E$1000<>\"\")"
+      },
+      {
+        "row": 6,
+        "col": 21,
+        "formula": "=FILTER('4_Metas'!$H$2:$H$1000;'4_Metas'!$A$2:$A$1000=$E$2;'4_Metas'!$E$2:$E$1000<>\"\")"
+      },
+      {
+        "row": 6,
+        "col": 22,
+        "formula": "=IF($Q6=\"\";\"\";SUMIFS('1_Lançamentos Diários'!$C$2:$C$2000;'1_Lançamentos Diários'!$A$2:$A$2000;$B$2;'1_Lançamentos Diários'!$B$2:$B$2000;$Q6))"
+      },
+      {
+        "row": 6,
+        "col": 23,
+        "formula": "=IF($Q6=\"\";\"\";IFERROR($V6/$U6;0))"
+      },
+      {
+        "row": 6,
+        "col": 24,
+        "formula": "=IF($Q6=\"\";\"\";SUMIFS('1_Lançamentos Diários'!$C$2:$C$2000;'1_Lançamentos Diários'!$A$2:$A$2000;\">=\"&$E$2;'1_Lançamentos Diários'!$A$2:$A$2000;\"<=\"&$B$2;'1_Lançamentos Diários'!$B$2:$B$2000;$Q6))"
+      },
+      {
+        "row": 6,
+        "col": 25,
+        "formula": "=IF($Q6=\"\";\"\";IFERROR($X6/$T6;0))"
+      },
+      {
+        "row": 6,
+        "col": 26,
+        "formula": "=IF($Q6=\"\";\"\";MIN(SUMIFS('4_Metas'!$G$2:$G$1000;'4_Metas'!$A$2:$A$1000;$E$2;'4_Metas'!$E$2:$E$1000;$Q6);NETWORKDAYS($E$2;$B$2;'5_Configurações'!$D$2:$D$50))*$U6)"
+      },
+      {
+        "row": 6,
+        "col": 27,
+        "formula": "=IF($Q6=\"\";\"\";IFERROR($X6/$Z6;0))"
+      }
+    ],
+    "error_sample": []
+  },
+  {
+    "title": "3_Ranking por Região",
+    "status": "ok",
+    "file": "/home/ubuntu/planilha-auditoria-grid/3_Ranking_por_Regi_o.json",
+    "formula_count": 155,
+    "error_count": 0,
+    "formula_sample": [
+      {
+        "row": 2,
+        "col": 2,
+        "formula": "='2_Ranking por Vendedor'!B2"
+      },
+      {
+        "row": 2,
+        "col": 5,
+        "formula": "='2_Ranking por Vendedor'!E2"
+      },
+      {
+        "row": 6,
+        "col": 1,
+        "formula": "=ARRAYFORMULA(IF(B6:B30=\"\";\"\";ROW(B6:B30)-5))"
+      },
+      {
+        "row": 6,
+        "col": 2,
+        "formula": "=SORT(FILTER(Z6:AF30;Z6:Z30<>\"\");4;FALSE)"
+      },
+      {
+        "row": 6,
+        "col": 26,
+        "formula": "=UNIQUE(FILTER('4_Metas'!$B$2:$B$1000;'4_Metas'!$A$2:$A$1000=$E$2;'4_Metas'!$B$2:$B$1000<>\"\"))"
+      },
+      {
+        "row": 6,
+        "col": 27,
+        "formula": "=IF($Z6=\"\";\"\";SUMIF('2_Ranking por Vendedor'!$R$6:$R$105;$Z6;'2_Ranking por Vendedor'!$T$6:$T$105))"
+      },
+      {
+        "row": 6,
+        "col": 28,
+        "formula": "=IF($Z6=\"\";\"\";SUMIF('2_Ranking por Vendedor'!$R$6:$R$105;$Z6;'2_Ranking por Vendedor'!$X$6:$X$105))"
+      },
+      {
+        "row": 6,
+        "col": 29,
+        "formula": "=IF($Z6=\"\";\"\";IFERROR($AB6/$AA6;0))"
+      },
+      {
+        "row": 6,
+        "col": 30,
+        "formula": "=IF($Z6=\"\";\"\";SUMIF('2_Ranking por Vendedor'!$R$6:$R$105;$Z6;'2_Ranking por Vendedor'!$V$6:$V$105))"
+      },
+      {
+        "row": 6,
+        "col": 31,
+        "formula": "=IF($Z6=\"\";\"\";SUMIF('2_Ranking por Vendedor'!$R$6:$R$105;$Z6;'2_Ranking por Vendedor'!$Z$6:$Z$105))"
+      },
+      {
+        "row": 6,
+        "col": 32,
+        "formula": "=IF($Z6=\"\";\"\";IFERROR($AB6/$AE6;0))"
+      },
+      {
+        "row": 7,
+        "col": 27,
+        "formula": "=IF($Z7=\"\";\"\";SUMIF('2_Ranking por Vendedor'!$R$6:$R$105;$Z7;'2_Ranking por Vendedor'!$T$6:$T$105))"
+      },
+      {
+        "row": 7,
+        "col": 28,
+        "formula": "=IF($Z7=\"\";\"\";SUMIF('2_Ranking por Vendedor'!$R$6:$R$105;$Z7;'2_Ranking por Vendedor'!$X$6:$X$105))"
+      },
+      {
+        "row": 7,
+        "col": 29,
+        "formula": "=IF($Z7=\"\";\"\";IFERROR($AB7/$AA7;0))"
+      },
+      {
+        "row": 7,
+        "col": 30,
+        "formula": "=IF($Z7=\"\";\"\";SUMIF('2_Ranking por Vendedor'!$R$6:$R$105;$Z7;'2_Ranking por Vendedor'!$V$6:$V$105))"
+      },
+      {
+        "row": 7,
+        "col": 31,
+        "formula": "=IF($Z7=\"\";\"\";SUMIF('2_Ranking por Vendedor'!$R$6:$R$105;$Z7;'2_Ranking por Vendedor'!$Z$6:$Z$105))"
+      },
+      {
+        "row": 7,
+        "col": 32,
+        "formula": "=IF($Z7=\"\";\"\";IFERROR($AB7/$AE7;0))"
+      },
+      {
+        "row": 8,
+        "col": 27,
+        "formula": "=IF($Z8=\"\";\"\";SUMIF('2_Ranking por Vendedor'!$R$6:$R$105;$Z8;'2_Ranking por Vendedor'!$T$6:$T$105))"
+      },
+      {
+        "row": 8,
+        "col": 28,
+        "formula": "=IF($Z8=\"\";\"\";SUMIF('2_Ranking por Vendedor'!$R$6:$R$105;$Z8;'2_Ranking por Vendedor'!$X$6:$X$105))"
+      },
+      {
+        "row": 8,
+        "col": 29,
+        "formula": "=IF($Z8=\"\";\"\";IFERROR($AB8/$AA8;0))"
+      }
+    ],
+    "error_sample": []
+  },
+  {
+    "title": "4_Metas",
+    "status": "ok",
+    "file": "/home/ubuntu/planilha-auditoria-grid/4_Metas.json",
+    "formula_count": 34,
+    "error_count": 0,
+    "formula_sample": [
+      {
+        "row": 2,
+        "col": 7,
+        "formula": "=NETWORKDAYS(A2;EOMONTH(A2;0);'5_Configurações'!$D$2:$D$50)"
+      },
+      {
+        "row": 2,
+        "col": 8,
+        "formula": "=IFERROR(F2/G2;0)"
+      },
+      {
+        "row": 3,
+        "col": 7,
+        "formula": "=NETWORKDAYS(A3;EOMONTH(A3;0);'5_Configurações'!$D$2:$D$50)"
+      },
+      {
+        "row": 3,
+        "col": 8,
+        "formula": "=IFERROR(F3/G3;0)"
+      },
+      {
+        "row": 4,
+        "col": 7,
+        "formula": "=NETWORKDAYS(A4;EOMONTH(A4;0);'5_Configurações'!$D$2:$D$50)"
+      },
+      {
+        "row": 4,
+        "col": 8,
+        "formula": "=IFERROR(F4/G4;0)"
+      },
+      {
+        "row": 5,
+        "col": 7,
+        "formula": "=NETWORKDAYS(A5;EOMONTH(A5;0);'5_Configurações'!$D$2:$D$50)"
+      },
+      {
+        "row": 5,
+        "col": 8,
+        "formula": "=IFERROR(F5/G5;0)"
+      },
+      {
+        "row": 6,
+        "col": 7,
+        "formula": "=NETWORKDAYS(A6;EOMONTH(A6;0);'5_Configurações'!$D$2:$D$50)"
+      },
+      {
+        "row": 6,
+        "col": 8,
+        "formula": "=IFERROR(F6/G6;0)"
+      },
+      {
+        "row": 7,
+        "col": 7,
+        "formula": "=NETWORKDAYS(A7;EOMONTH(A7;0);'5_Configurações'!$D$2:$D$50)"
+      },
+      {
+        "row": 7,
+        "col": 8,
+        "formula": "=IFERROR(F7/G7;0)"
+      },
+      {
+        "row": 8,
+        "col": 7,
+        "formula": "=NETWORKDAYS(A8;EOMONTH(A8;0);'5_Configurações'!$D$2:$D$50)"
+      },
+      {
+        "row": 8,
+        "col": 8,
+        "formula": "=IFERROR(F8/G8;0)"
+      },
+      {
+        "row": 9,
+        "col": 7,
+        "formula": "=NETWORKDAYS(A9;EOMONTH(A9;0);'5_Configurações'!$D$2:$D$50)"
+      },
+      {
+        "row": 9,
+        "col": 8,
+        "formula": "=IFERROR(F9/G9;0)"
+      },
+      {
+        "row": 10,
+        "col": 7,
+        "formula": "=NETWORKDAYS(A10;EOMONTH(A10;0);'5_Configurações'!$D$2:$D$50)"
+      },
+      {
+        "row": 10,
+        "col": 8,
+        "formula": "=IFERROR(F10/G10;0)"
+      },
+      {
+        "row": 11,
+        "col": 7,
+        "formula": "=NETWORKDAYS(A11;EOMONTH(A11;0);'5_Configurações'!$D$2:$D$50)"
+      },
+      {
+        "row": 11,
+        "col": 8,
+        "formula": "=IFERROR(F11/G11;0)"
+      }
+    ],
+    "error_sample": []
+  },
+  {
+    "title": "5_Configurações",
+    "status": "ok",
+    "file": "/home/ubuntu/planilha-auditoria-grid/5_Configura_es.json",
+    "formula_count": 3,
+    "error_count": 0,
+    "formula_sample": [
+      {
+        "row": 2,
+        "col": 2,
+        "formula": "='2_Ranking por Vendedor'!B2"
+      },
+      {
+        "row": 3,
+        "col": 2,
+        "formula": "=DATE(YEAR(B2);MONTH(B2);1)"
+      },
+      {
+        "row": 4,
+        "col": 2,
+        "formula": "=NETWORKDAYS(B3;EOMONTH(B3;0);D2:D50)"
+      }
+    ],
+    "error_sample": []
+  },
+  {
+    "title": "6_Consolidado 12M e Ano",
+    "status": "ok",
+    "file": "/home/ubuntu/planilha-auditoria-grid/6_Consolidado_12M_e_Ano.json",
+    "formula_count": 674,
+    "error_count": 0,
+    "formula_sample": [
+      {
+        "row": 2,
+        "col": 2,
+        "formula": "=IF(COUNTA('1_Lançamentos Diários'!$A$2:$A$2000)=0;TODAY();MAX('1_Lançamentos Diários'!$A$2:$A$2000))"
+      },
+      {
+        "row": 2,
+        "col": 5,
+        "formula": "=YEAR($B$2)"
+      },
+      {
+        "row": 2,
+        "col": 9,
+        "formula": "=TEXT(EDATE(DATE(YEAR($B$2);MONTH($B$2);1);-11);\"mmm/yyyy\")&\" a \"&TEXT($B$2;\"dd/mm/yyyy\")"
+      },
+      {
+        "row": 3,
+        "col": 2,
+        "formula": "=SUMIFS('1_Lançamentos Diários'!$C$2:$C$2000;'1_Lançamentos Diários'!$A$2:$A$2000;\">=\"&DATE(YEAR($B$2);1;1);'1_Lançamentos Diários'!$A$2:$A$2000;\"<=\"&$B$2)"
+      },
+      {
+        "row": 3,
+        "col": 5,
+        "formula": "=SUMIFS('4_Metas'!$F$2:$F$1000;'4_Metas'!$A$2:$A$1000;\">=\"&DATE(YEAR($B$2);1;1);'4_Metas'!$A$2:$A$1000;\"<=\"&DATE(YEAR($B$2);MONTH($B$2);1))"
+      },
+      {
+        "row": 3,
+        "col": 8,
+        "formula": "=IFERROR(B3/E3;0)"
+      },
+      {
+        "row": 3,
+        "col": 10,
+        "formula": "=SUMIFS('1_Lançamentos Diários'!$C$2:$C$2000;'1_Lançamentos Diários'!$A$2:$A$2000;\">=\"&EDATE(DATE(YEAR($B$2);MONTH($B$2);1);-11);'1_Lançamentos Diários'!$A$2:$A$2000;\"<=\"&$B$2)"
+      },
+      {
+        "row": 3,
+        "col": 13,
+        "formula": "=IFERROR(J3/SUMIFS('4_Metas'!$F$2:$F$1000;'4_Metas'!$A$2:$A$1000;\">=\"&EDATE(DATE(YEAR($B$2);MONTH($B$2);1);-11);'4_Metas'!$A$2:$A$1000;\"<=\"&DATE(YEAR($B$2);MONTH($B$2);1));0)"
+      },
+      {
+        "row": 7,
+        "col": 1,
+        "formula": "=IF(B7=\"\";\"\";ROW()-6)"
+      },
+      {
+        "row": 7,
+        "col": 2,
+        "formula": "=SORT(FILTER(Q7:U31;Q7:Q31<>\"\");5;FALSE)"
+      },
+      {
+        "row": 7,
+        "col": 8,
+        "formula": "=IF(I7=\"\";\"\";ROW()-6)"
+      },
+      {
+        "row": 7,
+        "col": 9,
+        "formula": "=SORT(FILTER(X7:AB31;X7:X31<>\"\");5;FALSE)"
+      },
+      {
+        "row": 7,
+        "col": 17,
+        "formula": "=SORT(UNIQUE(FILTER('4_Metas'!$E$2:$E$1000;'4_Metas'!$E$2:$E$1000<>\"\")))"
+      },
+      {
+        "row": 7,
+        "col": 18,
+        "formula": "=IF(Q7=\"\";\"\";IFERROR(INDEX(FILTER('4_Metas'!$B$2:$B$1000;'4_Metas'!$E$2:$E$1000=Q7;'4_Metas'!$A$2:$A$1000=MAXIFS('4_Metas'!$A$2:$A$1000;'4_Metas'!$E$2:$E$1000;Q7;'4_Metas'!$A$2:$A$1000;\"<=\"&$B$2));1);\"\"))"
+      },
+      {
+        "row": 7,
+        "col": 19,
+        "formula": "=IF(Q7=\"\";\"\";SUMIFS('1_Lançamentos Diários'!$C$2:$C$2000;'1_Lançamentos Diários'!$B$2:$B$2000;Q7;'1_Lançamentos Diários'!$A$2:$A$2000;\">=\"&DATE(YEAR($B$2);1;1);'1_Lançamentos Diários'!$A$2:$A$2000;\"<=\"&$B$2))"
+      },
+      {
+        "row": 7,
+        "col": 20,
+        "formula": "=IF(Q7=\"\";\"\";SUMIFS('4_Metas'!$F$2:$F$1000;'4_Metas'!$E$2:$E$1000;Q7;'4_Metas'!$A$2:$A$1000;\">=\"&DATE(YEAR($B$2);1;1);'4_Metas'!$A$2:$A$1000;\"<=\"&DATE(YEAR($B$2);MONTH($B$2);1)))"
+      },
+      {
+        "row": 7,
+        "col": 21,
+        "formula": "=IFERROR(S7/T7;0)"
+      },
+      {
+        "row": 7,
+        "col": 24,
+        "formula": "=Q7"
+      },
+      {
+        "row": 7,
+        "col": 25,
+        "formula": "=R7"
+      },
+      {
+        "row": 7,
+        "col": 26,
+        "formula": "=IF(X7=\"\";\"\";SUMIFS('1_Lançamentos Diários'!$C$2:$C$2000;'1_Lançamentos Diários'!$B$2:$B$2000;X7;'1_Lançamentos Diários'!$A$2:$A$2000;\">=\"&EDATE(DATE(YEAR($B$2);MONTH($B$2);1);-11);'1_Lançamentos Diários'!$A$2:$A$2000;\"<=\"&$B$2))"
+      }
+    ],
+    "error_sample": []
+  },
+  {
+    "title": "7_Upload Resumo Comercial",
+    "status": "ok",
+    "file": "/home/ubuntu/planilha-auditoria-grid/7_Upload_Resumo_Comercial.json",
+    "formula_count": 0,
+    "error_count": 0,
+    "formula_sample": [],
+    "error_sample": []
+  },
+  {
+    "title": "7_Base Original (preservada)",
+    "status": "ok",
+    "file": "/home/ubuntu/planilha-auditoria-grid/7_Base_Original_preservada.json",
+    "formula_count": 9,
+    "error_count": 0,
+    "formula_sample": [
+      {
+        "row": 6,
+        "col": 2,
+        "formula": "=B5+D5"
+      },
+      {
+        "row": 6,
+        "col": 6,
+        "formula": "=F5+H5"
+      },
+      {
+        "row": 6,
+        "col": 10,
+        "formula": "=J5+L5"
+      },
+      {
+        "row": 6,
+        "col": 14,
+        "formula": "=N5+P5+R5"
+      },
+      {
+        "row": 6,
+        "col": 20,
+        "formula": "=T5+V5"
+      },
+      {
+        "row": 6,
+        "col": 24,
+        "formula": "=X5+Z5"
+      },
+      {
+        "row": 6,
+        "col": 28,
+        "formula": "=AB5+AD5"
+      },
+      {
+        "row": 6,
+        "col": 32,
+        "formula": "=AF5+AH5"
+      },
+      {
+        "row": 6,
+        "col": 36,
+        "formula": "=B6+F6+J6+N6+T6+X6+AB6+AF6"
+      }
+    ],
+    "error_sample": []
+  }
+]

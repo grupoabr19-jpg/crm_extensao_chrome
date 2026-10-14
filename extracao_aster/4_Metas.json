@@ -1,0 +1,204 @@
+{
+  "majorDimension": "ROWS",
+  "range": "'4_Metas'!A1:I1000",
+  "values": [
+    [
+      "Mês de referência",
+      "Região",
+      "Líder regional",
+      "Segmento",
+      "Vendedor",
+      "Meta mensal (kg)",
+      "Dias úteis",
+      "Meta diária (kg)",
+      "Observação"
+    ],
+    [
+      "setembro/2026",
+      "JUNDIAÍ",
+      "DYONAVA",
+      "VARE",
+      "JOSIANE",
+      "83.246,00",
+      "21",
+      "3.964,10",
+      "Migrado da estrutura original"
+    ],
+    [
+      "setembro/2026",
+      "JUNDIAÍ",
+      "DYONAVA",
+      "VCORP",
+      "KAYLANE",
+      "83.700,00",
+      "21",
+      "3.985,71",
+      "Migrado da estrutura original"
+    ],
+    [
+      "setembro/2026",
+      "BRAG. PTA.",
+      "ALESSANDRO",
+      "VARE",
+      "LEIZ",
+      "109.598,00",
+      "21",
+      "5.218,95",
+      "Migrado da estrutura original"
+    ],
+    [
+      "setembro/2026",
+      "BRAG. PTA.",
+      "ALESSANDRO",
+      "VCORP",
+      "HELOÁ",
+      "90.576,00",
+      "21",
+      "4.313,14",
+      "Migrado da estrutura original"
+    ],
+    [
+      "setembro/2026",
+      "EXTREMA",
+      "GUSTAVO",
+      "VARE",
+      "INAYARA",
+      "107.658,00",
+      "21",
+      "5.126,57",
+      "Migrado da estrutura original"
+    ],
+    [
+      "setembro/2026",
+      "EXTREMA",
+      "GUSTAVO",
+      "VCORP",
+      "TAINARA",
+      "77.555,00",
+      "21",
+      "3.693,10",
+      "Migrado da estrutura original"
+    ],
+    [
+      "setembro/2026",
+      "MICRO",
+      "JULIANO",
+      "VARE",
+      "EDMILA",
+      "111.100,00",
+      "21",
+      "5.290,48",
+      "Migrado da estrutura original"
+    ],
+    [
+      "setembro/2026",
+      "MICRO",
+      "JULIANO",
+      "VCORP",
+      "MATHEUS TEIXEIRA",
+      "83.424,00",
+      "21",
+      "3.972,57",
+      "Migrado da estrutura original"
+    ],
+    [
+      "setembro/2026",
+      "MICRO",
+      "JULIANO",
+      "VARC",
+      "ARIANE",
+      "96.221,00",
+      "21",
+      "4.581,95",
+      "Migrado da estrutura original"
+    ],
+    [
+      "setembro/2026",
+      "POUSO ALEGRE",
+      "PAOLA",
+      "VARE",
+      "RAFAELA",
+      "111.354,00",
+      "21",
+      "5.302,57",
+      "Migrado da estrutura original"
+    ],
+    [
+      "setembro/2026",
+      "POUSO ALEGRE",
+      "PAOLA",
+      "VCORP",
+      "VITORIA",
+      "78.133,00",
+      "21",
+      "3.720,62",
+      "Migrado da estrutura original"
+    ],
+    [
+      "setembro/2026",
+      "POÇOS",
+      "JOSÉ FELIPE",
+      "VARE",
+      "MILENA",
+      "85.666,00",
+      "21",
+      "4.079,33",
+      "Migrado da estrutura original"
+    ],
+    [
+      "setembro/2026",
+      "POÇOS",
+      "JOSÉ FELIPE",
+      "VCORP",
+      "CAMILA",
+      "115.849,00",
+      "21",
+      "5.516,62",
+      "Migrado da estrutura original"
+    ],
+    [
+      "setembro/2026",
+      "ITAJUBÁ",
+      "JENNIFER",
+      "VARE",
+      "GABRIELA",
+      "110.624,00",
+      "21",
+      "5.267,81",
+      "Migrado da estrutura original"
+    ],
+    [
+      "setembro/2026",
+      "ITAJUBÁ",
+      "JENNIFER",
+      "VCORP",
+      "JESSICA",
+      "107.299,00",
+      "21",
+      "5.109,48",
+      "Migrado da estrutura original"
+    ],
+    [
+      "setembro/2026",
+      "VARGINHA",
+      "PETERSON",
+      "VARE",
+      "BRUNA",
+      "124.000,00",
+      "21",
+      "5.904,76",
+      "Migrado da estrutura original"
+    ],
+    [
+      "setembro/2026",
+      "VARGINHA",
+      "PETERSON",
+      "VCORP",
+      "THAÍS",
+      "89.000,00",
+      "21",
+      "4.238,10",
+      "Migrado da estrutura original"
+    ]
+  ]
+}

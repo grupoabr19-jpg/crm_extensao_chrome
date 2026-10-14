@@ -1,0 +1,57 @@
+{
+  "majorDimension": "ROWS",
+  "range": "'5_Configurações'!A1:E100",
+  "values": [
+    [
+      "Parâmetro",
+      "Valor",
+      "",
+      "Feriados",
+      "Descrição"
+    ],
+    [
+      "Data de referência atual",
+      "09/09/2026"
+    ],
+    [
+      "Mês de referência",
+      "01/09/2026"
+    ],
+    [
+      "Dias úteis do mês",
+      "21"
+    ],
+    [
+      "Unidade de peso",
+      "kg"
+    ],
+    [
+      "Acionamento manual",
+      "Menu Automação de vendas → Atualizar agora",
+      "",
+      "07/09/2026",
+      "Independência do Brasil"
+    ],
+    [
+      "Desafio 1 — adicional sobre a meta",
+      "15%",
+      "",
+      "",
+      "Percentual editável aplicado sobre a Meta Base."
+    ],
+    [
+      "Desafio 2 — adicional sobre a meta",
+      "30%",
+      "",
+      "",
+      "Percentual editável aplicado sobre a Meta Base."
+    ],
+    [
+      "Faturamento vendido no mês (R$) — temporário",
+      "",
+      "",
+      "",
+      "Preenchimento manual temporário até o faturamento ser integrado ao Aster."
+    ]
+  ]
+}
