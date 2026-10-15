@@ -14,10 +14,10 @@ const crmPassword = process.env.CRM_PASSWORD || '';
 const pietraName = process.env.PIETRA_NAME || 'Pietra';
 const pietraPhone = normalizePhone(process.env.PIETRA_PHONE || '+5535998138542');
 const replyDelayEnabled = process.env.REPLY_DELAY_ENABLED !== 'false';
-const replyDelayMinMs = envInteger('REPLY_DELAY_MIN_MS', 1800, 0, 15000);
-const replyDelayMaxMs = envInteger('REPLY_DELAY_MAX_MS', 5000, replyDelayMinMs, 30000);
-const replyDelayPerCharMs = envInteger('REPLY_DELAY_PER_CHAR_MS', 20, 0, 100);
-const replyDelayJitterMs = envInteger('REPLY_DELAY_JITTER_MS', 700, 0, 5000);
+const replyDelayMinMs = envInteger('REPLY_DELAY_MIN_MS', 3500, 0, 15000);
+const replyDelayMaxMs = envInteger('REPLY_DELAY_MAX_MS', 7500, replyDelayMinMs, 30000);
+const replyDelayPerCharMs = envInteger('REPLY_DELAY_PER_CHAR_MS', 26, 0, 100);
+const replyDelayJitterMs = envInteger('REPLY_DELAY_JITTER_MS', 1200, 0, 5000);
 const allowedPhones = new Set(
   (process.env.ALLOWED_PHONES || '')
     .split(',')
@@ -28,6 +28,7 @@ const allowedPhones = new Set(
 const seenMessageIds = new Map();
 const conversations = new Map();
 const customerReplyQueues = new Map();
+const pendingCustomerReplies = new Map();
 let crmSession = { token: '', expiresAt: 0 };
 let sellerDirectory = { items: [], expiresAt: 0 };
 const MAX_SEEN = 500;
@@ -996,13 +997,22 @@ async function sendWhatsAppText(phone, body) {
 
 async function sendCustomerReply(phone, body) {
   const reply = conversationalPunctuation(body);
+  const replyToken = Symbol(phone);
+  pendingCustomerReplies.set(phone, replyToken);
+
+  if (replyDelayEnabled) {
+    await wait(calculateReplyDelayMs(reply));
+  }
+  if (pendingCustomerReplies.get(phone) !== replyToken) {
+    console.log(JSON.stringify({ event: 'reply_superseded', phone }));
+    return { skipped: true, reason: 'newer_customer_message' };
+  }
+  pendingCustomerReplies.delete(phone);
+
   const previousReply = customerReplyQueues.get(phone) || Promise.resolve();
   const queuedReply = previousReply
     .catch(() => undefined)
     .then(async () => {
-      if (replyDelayEnabled) {
-        await wait(calculateReplyDelayMs(reply));
-      }
       const result = await sendWhatsAppText(phone, reply);
       const conversation = conversations.get(phone);
       if (conversation) {

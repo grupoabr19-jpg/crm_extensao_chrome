@@ -6,4 +6,4 @@ O bot não oferece orçamento, preço, estoque, prazo, condições comerciais ne
 
 As credenciais são fornecidas exclusivamente por variáveis de ambiente. Nunca copie perfis, QR Codes, tokens ou arquivos de ambiente para esta pasta.
 
-As respostas ao cliente recebem um pequeno atraso proporcional ao tamanho da mensagem, com variação para evitar um ritmo mecânico. Os padrões são de 1,8 a 5 segundos. O comportamento pode ser ajustado com `REPLY_DELAY_ENABLED`, `REPLY_DELAY_MIN_MS`, `REPLY_DELAY_MAX_MS`, `REPLY_DELAY_PER_CHAR_MS` e `REPLY_DELAY_JITTER_MS`. Mensagens internas para vendedores não recebem esse atraso.
+As respostas ao cliente recebem um atraso proporcional ao tamanho da mensagem, com variação para evitar um ritmo mecânico. Os padrões são de 3,5 a 7,5 segundos. Quando o cliente envia várias mensagens seguidas, a resposta ainda pendente é substituída por uma única resposta baseada no contexto mais recente, evitando perguntas repetidas. O comportamento pode ser ajustado com `REPLY_DELAY_ENABLED`, `REPLY_DELAY_MIN_MS`, `REPLY_DELAY_MAX_MS`, `REPLY_DELAY_PER_CHAR_MS` e `REPLY_DELAY_JITTER_MS`. Mensagens internas para vendedores não recebem esse atraso.

@@ -9,10 +9,10 @@ beforeAll(async () => {
 
 describe("WuzAPI bot conversation logic", () => {
   it("adds a bounded human-like delay based on reply length", () => {
-    const options = { minimum: 1800, maximum: 5000, perCharacter: 20, jitter: 700 };
-    expect(bot.calculateReplyDelayMs("Oi!", 0, options)).toBe(1800);
-    expect(bot.calculateReplyDelayMs("a".repeat(100), 0.5, options)).toBe(2350);
-    expect(bot.calculateReplyDelayMs("a".repeat(400), 1, options)).toBe(5000);
+    const options = { minimum: 3500, maximum: 7500, perCharacter: 26, jitter: 1200 };
+    expect(bot.calculateReplyDelayMs("Oi!", 0, options)).toBe(3500);
+    expect(bot.calculateReplyDelayMs("a".repeat(150), 0.5, options)).toBe(4500);
+    expect(bot.calculateReplyDelayMs("a".repeat(400), 1, options)).toBe(7500);
   });
 
   it("retains city, UF and a normal roof-tile request without turning it into PIR", () => {
