@@ -4,6 +4,7 @@ export type ConversationState = {
   purchaseIntent?: boolean;
   commercialHandoffRequested?: boolean;
   awaitingField?: string;
+  locationAmbiguous?: boolean;
   name?: string;
   city?: string;
   uf?: string;
@@ -12,6 +13,12 @@ export type ConversationState = {
 };
 
 export function appendCrmCaseLink(message: string, baseUrl: string, caseId: string): string;
+export function analyzeDeliveryLocation(text: string): {
+  city: string;
+  uf: string;
+  cities: string[];
+  requiresConfirmation: boolean;
+};
 export function calculateReplyDelayMs(
   text: string,
   randomValue?: number,
@@ -20,9 +27,11 @@ export function calculateReplyDelayMs(
 export function commercialQualificationReply(conversation: ConversationState): string;
 export function conversationalPunctuation(value: string): string;
 export function enforceCommercialBoundaries(reply: string, conversation: ConversationState): string;
+export function extractExpectedDeliveryCity(text: string): string;
 export function extractFactsSmart(text: string): { name: string; city: string; uf: string; product: string };
 export function greetingReply(text: string): string;
 export function handoffSummary(conversation: ConversationState): string;
+export function inferDeliveryPipeline(conversation: ConversationState): "VAREJO" | "ATACADO";
 export function hasQualificationDetail(conversation: ConversationState): boolean;
 export function isReadyForHandoff(conversation: ConversationState, text: string): boolean;
 export function missingQuestions(conversation: ConversationState): string[];

@@ -50,7 +50,12 @@ const CITY_ALIASES = new Map([
   ['braganca paulista', 'Braganca Paulista'],
   ['atibaia', 'Atibaia'],
   ['jundiai', 'Jundiai'],
+  ['sao paulo', 'Sao Paulo'],
+  ['são paulo', 'Sao Paulo'],
+  ['rio de janeiro', 'Rio De Janeiro'],
+  ['belo horizonte', 'Belo Horizonte'],
   ['varginha', 'Varginha'],
+  ['andradas', 'Andradas'],
   ['itajuba', 'Itajuba'],
   ['itajauba', 'Itajuba'],
   ['pocos de caldas', 'Pocos De Caldas']
@@ -67,6 +72,24 @@ const PRODUCT_ALIASES = [
   { product: 'Calha', aliases: ['calha', 'calhas'] }
 ];
 const STOP_WORDS = new Set(['bom', 'boa', 'dia', 'tarde', 'noite', 'oi', 'ola', 'quero', 'queria', 'preciso', 'procuro', 'comprar', 'orcamento', 'orçamento', 'sou', 'de', 'da', 'do', 'em', 'pra', 'para', 'por', 'favor', 'vendedor', 'atendente', 'transfere', 'transferir', 'manda', 'mande', 'chama']);
+const SOUTH_MINAS_DELIVERY_CITIES = new Set([
+  'Cambui', 'Camanducaia', 'Itapeva', 'Extrema', 'Pouso Alegre', 'Varginha', 'Itajuba',
+  'Pocos De Caldas', 'Andradas', 'Tres Pontas', 'Tres Coracoes', 'Eloi Mendes',
+  'Paraguacu', 'Monsenhor Paulo', 'Campanha', 'Cambuquira', 'Careacu', 'Coqueiral',
+  'Santana Da Vargem', 'Jacutinga', 'Borda Da Mata', 'Bueno Brandao', 'Lambari',
+  'Caxambu', 'Sao Lourenco', 'Sao Sebastiao Da Bela Vista', 'Natercia', 'Heliodora',
+  'Ouro Fino', 'Baependi', 'Carmo De Minas', 'Monte Siao', 'Inconfidentes',
+  'Conceicao Do Rio Verde', 'Alfenas', 'Machado', 'Caldas', 'Santa Rita De Caldas',
+  'Congonhal', 'Poco Fundo', 'Silvianopolis', 'Fama', 'Campos Gerais', 'Ibitiura',
+  'Santa Rita Sapucai', 'Piranguinho', 'Maria Da Fe', 'Pedralva', 'Virginia',
+  'Delfim Moreira', 'Goncalves', 'Sapucai Mirim', 'Conceicao Dos Ouros',
+  'Cachoeira De Minas', 'Brasopolis', 'Paraisopolis', 'Sao Jose Do Alegre',
+  'Consolacao', 'Toledo', 'Munhoz', 'Bom Repouso', 'Senador Amaral', 'Estiva',
+  'Corrego Do Bom Jesus', 'Nepomuceno', 'Carmo Da Cachoeira', 'Lavras', 'Formiga',
+  'Soledade De Minas', 'Cruzilia', 'Aiuruoca', 'Andrelandia', 'Campo Do Meio',
+  'Serrania', 'Guaxupe', 'Wenceslau Braz', 'Tocos Do Moji', 'Conceicao Das Pedras',
+  'Jesuania'
+].map(normalizeText));
 
 function envInteger(name, fallback, minimum, maximum) {
   const parsed = Number.parseInt(process.env[name] || '', 10);
@@ -170,7 +193,7 @@ function titleCase(value) {
   return String(value || '')
     .trim()
     .toLowerCase()
-    .replace(/\b\p{L}/gu, (letter) => letter.toUpperCase());
+    .replace(/(^|[\s'-])\p{L}/gu, (letter) => letter.toUpperCase());
 }
 
 function words(value) {
@@ -229,6 +252,52 @@ function candidateWindows(raw, maxSize = 3) {
     }
   }
   return list;
+}
+
+function mentionedCities(raw) {
+  const normalized = ` ${normalizeText(raw).replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim()} `;
+  const found = [];
+  const aliases = [...CITY_ALIASES.entries()].sort(([left], [right]) => right.length - left.length);
+  for (const [alias, city] of aliases) {
+    const normalizedAlias = normalizeText(alias);
+    if (normalized.includes(` ${normalizedAlias} `) && !found.includes(city)) found.push(city);
+  }
+  return found;
+}
+
+function analyzeDeliveryLocation(text) {
+  const normalized = normalizeText(text);
+  const cities = mentionedCities(text);
+  const mentionsResidence = /\b(moro|resido|moramos|residimos|sou de|somos de)\b/.test(normalized);
+  const mentionsDestination = /\b(entrega|entregar|obra|construindo|construcao|instalacao|destino)\b/.test(normalized);
+  const requiresConfirmation = cities.length > 1 || (cities.length === 1 && mentionsResidence && !mentionsDestination);
+  return {
+    city: cities.length === 1 && !requiresConfirmation ? cities[0] : '',
+    uf: requiresConfirmation ? '' : extractUf(text),
+    cities,
+    requiresConfirmation
+  };
+}
+
+function extractExpectedDeliveryCity(text) {
+  const withoutUf = String(text || '')
+    .replace(/\b(?:AC|AL|AP|AM|BA|CE|DF|ES|GO|MA|MT|MS|MG|PA|PB|PR|PE|PI|RJ|RN|RS|RO|RR|SC|SP|SE|TO)\b/gi, ' ')
+    .replace(/^\s*(?:a entrega (?:e|é) em|entrega em|para|em)\s+/i, '')
+    .replace(/[^A-Za-zÀ-ÿ\s'-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const parts = words(withoutUf);
+  if (!withoutUf || parts.length < 1 || parts.length > 6) return '';
+  if (parts.some((part) => ['nao', 'sei', 'ainda', 'talvez', 'confirmar', 'depois'].includes(part))) return '';
+  if (extractProduct(withoutUf) || wantsPortfolio(withoutUf) || wantsHumanSmart(withoutUf)) return '';
+  return titleCase(withoutUf);
+}
+
+function inferDeliveryPipeline(conversation) {
+  return String(conversation?.uf || '').toUpperCase() === 'MG'
+    && SOUTH_MINAS_DELIVERY_CITIES.has(normalizeText(conversation?.city))
+    ? 'VAREJO'
+    : 'ATACADO';
 }
 
 function extractCity(raw, commaParts) {
@@ -303,10 +372,26 @@ function upsertConversation(phone, text) {
   current.messages.push({ from: 'customer', text, at: new Date().toISOString() });
   current.messages = current.messages.slice(-MAX_HISTORY);
   const facts = extractFactsSmart(current.messages.filter((message) => message.from === 'customer').map((message) => message.text).join('\n'));
+  const latestLocation = analyzeDeliveryLocation(text);
+  const wasAwaitingCity = current.awaitingField === 'city';
+  const expectedDeliveryCity = wasAwaitingCity && !latestLocation.cities.length
+    ? extractExpectedDeliveryCity(text)
+    : '';
   const expectedName = current.awaitingField === 'name' ? extractExpectedName(text) : '';
   current.name ||= expectedName || facts.name;
-  current.city ||= facts.city;
-  current.uf ||= facts.uf;
+  if (latestLocation.requiresConfirmation) {
+    current.city = '';
+    current.uf = '';
+    current.locationAmbiguous = true;
+  } else if (wasAwaitingCity && (latestLocation.cities.length === 1 || expectedDeliveryCity)) {
+    current.city = latestLocation.cities[0] || expectedDeliveryCity;
+    current.uf = latestLocation.uf;
+    current.locationAmbiguous = false;
+  } else {
+    current.city ||= latestLocation.city || facts.city;
+    current.uf ||= latestLocation.uf || facts.uf;
+    if (current.city) current.locationAmbiguous = false;
+  }
   current.product ||= facts.product;
   if ((current.awaitingField === 'name' && current.name)
     || (current.awaitingField === 'city' && current.city)
@@ -391,10 +476,11 @@ function extractFactsSmart(text) {
     .split(/[,;\n]/)
     .map((part) => part.trim())
     .filter(Boolean);
-  const city = extractCity(raw, commaParts);
+  const location = analyzeDeliveryLocation(raw);
+  const city = location.requiresConfirmation ? '' : (location.city || extractCity(raw, commaParts));
   const product = extractProduct(raw);
   const name = extractName(raw, commaParts, city, product);
-  const uf = extractUf(raw);
+  const uf = location.requiresConfirmation ? '' : extractUf(raw);
   return { name, city, uf, product };
 }
 
@@ -433,7 +519,7 @@ function hasQualificationDetail(conversation) {
 
 function nextRequiredQualification(conversation) {
   if (!conversation?.name) return 'name';
-  if (!conversation?.city) return 'city';
+  if (conversation?.locationAmbiguous || !conversation?.city) return 'city';
   if (!conversation?.uf) return 'uf';
   if (!conversation?.product) return 'product';
   if (!hasQualificationDetail(conversation)) return 'detail';
@@ -483,8 +569,8 @@ function purchaseInterestReply(conversation) {
   if (!conversation?.name) {
     return 'Que bom saber do seu interesse! Antes de continuar, como posso te chamar?';
   }
-  if (!conversation?.city) {
-    return `Obrigado, ${conversation.name.split(/\s+/)[0]}! Em qual cidade e UF será o atendimento?`;
+  if (conversation?.locationAmbiguous || !conversation?.city) {
+    return `Obrigado, ${conversation.name.split(/\s+/)[0]}! Em qual cidade e UF precisa que a entrega seja feita?`;
   }
   if (!conversation?.uf) {
     return `${conversation.city} fica em qual UF?`;
@@ -637,12 +723,13 @@ async function askGroq(text, phone) {
             'Apresente-se com essa identidade no primeiro contato. Responda em portugues do Brasil, em tom caloroso, amigavel, educado e gentil, mas sem enrolacao. ' +
             'Use no maximo tres frases curtas, sem emoji, lista, markdown ou explicacao de regras internas. Nunca use travessao; prefira ponto, virgula ou ponto e virgula, como em uma conversa natural de WhatsApp. Primeiro reconheca o que o cliente disse e depois faca no maximo uma pergunta util. ' +
             'Seu papel e conversar, explicar os produtos do catalogo conhecido, tirar duvidas gerais e enriquecer a ficha antes de encaminhar ao vendedor. ' +
-            'Intencao de compra nao e ordem de transferencia: converse e qualifique. Siga sempre esta ordem, uma pergunta por vez: nome de tratamento, cidade e UF, produto, depois aplicacao, medida ou quantidade. ' +
+            'Intencao de compra nao e ordem de transferencia: converse e qualifique. Siga sempre esta ordem, uma pergunta por vez: nome de tratamento, cidade e UF da entrega, produto, depois aplicacao, medida ou quantidade. ' +
             'Voce nunca faz, prepara, calcula ou oferece orcamentos ou cotacoes; nunca informa ou estima preco, desconto, estoque, prazo de entrega, condicao de pagamento, credito ou negociacao. ' +
             'Nunca cite, avalie ou compare concorrentes. Nunca prometa disponibilidade, resultado tecnico, certificacao, reserva, entrega, contato ou fechamento. Nao solicite documentos, senha, dados bancarios ou de cartao. ' +
             'Se pedirem preco, orcamento ou cotacao, diga com naturalidade que o vendedor responsavel cuidara disso e aproveite para coletar somente um dado util que ainda esteja faltando. ' +
             'Nunca transfira antes de registrar nome de tratamento, cidade, UF, produto e pelo menos um detalhe da necessidade, como aplicacao, medida ou quantidade. Isso tambem vale quando o cliente pedir um vendedor explicitamente. ' +
-            'Nao peca de novo um dado que ja foi informado e nunca diga que o cliente ainda precisa confirmar cidade se ela estiver nos dados ja informados. ' +
+            'A cidade usada no roteamento e sempre a cidade de entrega, nunca a cidade onde o cliente mora. Se houver duas cidades, referencia de moradia ou qualquer duvida sobre o destino, pergunte em qual cidade e UF a entrega precisa ser feita antes de encaminhar. ' +
+            'Nao peca de novo um dado que ja foi informado, exceto quando for necessario distinguir residencia e cidade de entrega. ' +
             'Quando perguntarem pelo portfolio, informe que trabalhamos com telhas (incluindo Telhas PIR ABR Telhas), perfil estrutural, tubos e metalons, vergalhao, malha e trelica. ' +
             'Conhecimento comercial: telhas PIR devem ser tratadas e vendidas como ABR Telhas. ' +
             'Nunca mencione MBP, MBO, fornecedor, fornecedora ou origem de fornecimento ao cliente. ' +
@@ -671,8 +758,8 @@ function qualificationReply(conversation) {
   if (!conversation?.name) {
     return 'Será um prazer ajudar. Como posso te chamar?';
   }
-  if (!conversation?.city) {
-    return `Obrigado, ${conversation.name.split(/\s+/)[0]}! Em qual cidade e UF será o atendimento?`;
+  if (conversation?.locationAmbiguous || !conversation?.city) {
+    return `Obrigado, ${conversation.name.split(/\s+/)[0]}! Em qual cidade e UF precisa que a entrega seja feita?`;
   }
   if (!conversation?.uf) {
     return `${conversation.city} fica em qual UF?`;
@@ -687,8 +774,8 @@ function commercialQualificationReply(conversation) {
   if (!conversation?.name) {
     return 'O orçamento será tratado pelo vendedor responsável. Como posso te chamar?';
   }
-  if (!conversation?.city) {
-    return `Obrigado, ${conversation.name.split(/\s+/)[0]}! Em qual cidade e UF será o atendimento?`;
+  if (conversation?.locationAmbiguous || !conversation?.city) {
+    return `Obrigado, ${conversation.name.split(/\s+/)[0]}! Em qual cidade e UF precisa que a entrega seja feita?`;
   }
   if (!conversation?.uf) {
     return `${conversation.city} fica em qual UF?`;
@@ -783,7 +870,7 @@ function handoffSummary(conversation) {
   return [
     `Atendimento iniciado pelo bot.`,
     conversation.name ? `Nome: ${conversation.name}.` : '',
-    conversation.city ? `Cidade: ${conversation.city}.` : '',
+    conversation.city ? `Cidade de entrega: ${conversation.city}.` : '',
     conversation.uf ? `UF: ${conversation.uf}.` : '',
     conversation.product ? `Interesse: ${conversation.product}.` : '',
     useful ? `Prévia do diálogo:\n${useful}` : ''
@@ -805,6 +892,7 @@ function inferBotSalesFunction(conversation) {
 
 async function createHandoff(phone, conversation) {
   if (!conversation.city) throw new Error('Cidade obrigatoria para roteamento');
+  const pipeline = inferDeliveryPipeline(conversation);
   const created = await crmFetch('/v1/cases', {
     method: 'POST',
     body: JSON.stringify({
@@ -816,8 +904,8 @@ async function createHandoff(phone, conversation) {
       salesFunction: inferBotSalesFunction(conversation),
       requireRoutedDestination: true,
       source: 'WhatsApp',
-      department: 'Vendas',
-      pipeline: 'VAREJO',
+      department: pipeline === 'ATACADO' ? 'Atacado' : 'Vendas',
+      pipeline,
       stage: 'Novo Lead',
       nextTask: 'Assumir atendimento transferido pelo bot',
       ...(conversation.transferTarget?.phone ? {
@@ -1000,6 +1088,16 @@ async function handleWebhook(req, res) {
     return;
   }
 
+  if (conversation.locationAmbiguous) {
+    const reply = requiredQualificationReply(conversation);
+    rememberQualificationQuestion(conversation);
+    await sendCustomerReply(phone, reply);
+    console.log(JSON.stringify({ event: 'delivery_city_confirmation', phone, id }));
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+
   if (wantsPortfolio(text)) {
     await sendCustomerReply(phone, PORTFOLIO_REPLY);
     console.log(JSON.stringify({ event: 'portfolio_replied', phone, id }));
@@ -1106,4 +1204,4 @@ if (process.env.BOT_TEST_MODE !== 'true') {
   });
 }
 
-export { appendCrmCaseLink, calculateReplyDelayMs, commercialQualificationReply, conversationalPunctuation, enforceCommercialBoundaries, extractFactsSmart, greetingReply, handoffSummary, hasQualificationDetail, isReadyForHandoff, missingQuestions, purchaseInterestReply, qualificationReply, requestedPietra, resolveNamedOperator, wantsHumanSmart, wantsPortfolio, wantsPurchase, wantsQuote };
+export { analyzeDeliveryLocation, appendCrmCaseLink, calculateReplyDelayMs, commercialQualificationReply, conversationalPunctuation, enforceCommercialBoundaries, extractExpectedDeliveryCity, extractFactsSmart, greetingReply, handoffSummary, hasQualificationDetail, inferDeliveryPipeline, isReadyForHandoff, missingQuestions, purchaseInterestReply, qualificationReply, requestedPietra, resolveNamedOperator, wantsHumanSmart, wantsPortfolio, wantsPurchase, wantsQuote };

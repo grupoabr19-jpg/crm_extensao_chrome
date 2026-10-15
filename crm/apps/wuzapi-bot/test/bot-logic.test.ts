@@ -22,9 +22,32 @@ describe("WuzAPI bot conversation logic", () => {
       uf: "",
       product: "Telha"
     });
-    expect(bot.extractFactsSmart("sou de cambui mg")).toMatchObject({ city: "Cambui", uf: "MG" });
+    expect(bot.extractFactsSmart("sou de cambui mg")).toMatchObject({ city: "", uf: "" });
     expect(bot.extractFactsSmart("quero telha pir").product).toBe("Telha PIR ABR Telhas");
     expect(bot.extractFactsSmart("preciso de telia")).toMatchObject({ name: "", product: "Telha" });
+  });
+
+  it("confirms the delivery city instead of routing by the customer's residence", () => {
+    const location = bot.analyzeDeliveryLocation("eu moro em São Paulo mas estou construindo em Andradas");
+    expect(location).toEqual({
+      city: "",
+      uf: "",
+      cities: ["Sao Paulo", "Andradas"],
+      requiresConfirmation: true
+    });
+    expect(bot.extractFactsSmart("eu moro em São Paulo mas estou construindo em Andradas"))
+      .toMatchObject({ city: "", uf: "" });
+    expect(bot.extractExpectedDeliveryCity("São José do Rio Pardo, SP")).toBe("São José Do Rio Pardo");
+    expect(bot.purchaseInterestReply({ name: "Thiago", locationAmbiguous: true }))
+      .toContain("entrega seja feita");
+  });
+
+  it("uses retail only for South Minas delivery locations", () => {
+    expect(bot.inferDeliveryPipeline({ city: "Andradas", uf: "MG" })).toBe("VAREJO");
+    expect(bot.inferDeliveryPipeline({ city: "Sao Paulo", uf: "SP" })).toBe("ATACADO");
+    expect(bot.inferDeliveryPipeline({ city: "Belo Horizonte", uf: "MG" })).toBe("ATACADO");
+    expect(bot.inferDeliveryPipeline({ city: "Três Corações", uf: "MG" })).toBe("VAREJO");
+    expect(bot.inferDeliveryPipeline({ city: "Curitiba", uf: "PR" })).toBe("ATACADO");
   });
 
   it.each([
@@ -105,6 +128,7 @@ describe("WuzAPI bot conversation logic", () => {
         { from: "customer", text: "Cambui MG" }
       ]
     });
+    expect(summary).toContain("Cidade de entrega: Cambui.");
     expect(summary).toContain("Prévia do diálogo:");
     expect(summary).toContain("Cliente: quero telhas");
     expect(summary).toContain("Abraão: Em qual cidade?");

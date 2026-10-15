@@ -150,7 +150,7 @@ const CITY_REGION = new Map(Object.entries({
   "POCO FUNDO": "POCOS DE CALDAS",
   SILVIANOPOLIS: "POCOS DE CALDAS",
   FAMA: "POCOS DE CALDAS",
-  ANDRADAS: "POCOS DE CALDAS",
+  ANDRADAS: "VARGINHA",
   "CAMPOS GERAIS": "POCOS DE CALDAS",
   IBITIURA: "POCOS DE CALDAS",
   "SANTA RITA SAPUCAI": "ITAJUBA",
@@ -279,7 +279,7 @@ const NEARBY_10KM_CITY_REGION = new Map(Object.entries({
   JESUANIA: "POUSO ALEGRE"
 }));
 
-function inferRegion(input) {
+export function inferRegion(input) {
   const city = normalizeText(input.city);
   return normalizeText(input.region || CITY_REGION.get(city) || NEARBY_10KM_CITY_REGION.get(city) || city || "CAMBUI");
 }
@@ -934,6 +934,26 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
     const segmentLocked = ["corporativo", "especialista", "construcao_civil"].includes(salesFunction);
     if (!row && channel === "varejo") row = await tryRoute(salesFunction, "CAMBUI");
     if (!row && channel === "varejo") row = await tryRoute(null, "CAMBUI", true);
+    if (!row && channel === "atacado") {
+      row = await one(`
+        select sp.id profile_id, sp.profile_title, sp.sales_function, sp.whatsapp_e164,
+          u.id user_id, u.display_name seller_name, u.email,
+          sr.channel, sr.route_type, sr.route_value, sr.region, sr.priority
+        from seller_routes sr
+        join seller_profiles sp on sp.id=sr.profile_id
+        join users u on u.id=sp.user_id
+        where sr.organization_id=$1
+          and sr.active=true
+          and sp.active=true
+          and u.status='active'
+          and sp.whatsapp_e164 is not null
+          and sp.whatsapp_e164 <> ''
+          and sr.channel='atacado'
+          and sr.sales_function='vendedor_externo'
+        order by sr.priority, u.display_name, sr.route_value
+        limit 1
+      `, [ctx.org.id]);
+    }
     if (!row) return null;
     return { ...row, channel, salesFunction: row.sales_function || salesFunction, routeType: row.route_type || routeType, routeValue: row.route_value || routeValue };
   }
