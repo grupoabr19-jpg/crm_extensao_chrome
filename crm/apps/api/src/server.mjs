@@ -7,6 +7,7 @@ import { isPlaceholderConnectionString, loadDotEnv } from "./env.mjs";
 import { buildCasePayload, callGroqTriage, guardTriageOutput, normalizeTriageMessages } from "./ai-triage.mjs";
 import { parseImageDataUrl } from "./ai-vision.mjs";
 import { parseInactiveCustomers, parseProductionHistory } from "./customer-import.mjs";
+import { handoffLink } from "./handoff-link.mjs";
 import { makeMemoryStorage, makePostgresStorage } from "./storage.mjs";
 
 loadDotEnv();
@@ -28,12 +29,6 @@ function protocol() {
   let s = "";
   for (let i = 0; i < 8; i += 1) s += ALPHABET[b[i] & 31];
   return `ABR-${s.slice(0, 4)}-${s.slice(4)}`;
-}
-
-function handoffLink(targetE164, publicProtocol, text = "") {
-  if (!targetE164 || !String(targetE164).startsWith("+")) return "";
-  const message = text || `Ola! Sou do Grupo ABR. Recebi seu atendimento pelo protocolo ${publicProtocol}.`;
-  return `https://wa.me/${targetE164.slice(1)}?text=${encodeURIComponent(message)}`;
 }
 
 function externalHandoffMessage({ customerName, firstName, customerPhone, customerCode, company, city, uf, need, responsibleName, department, link, publicProtocol }) {

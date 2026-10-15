@@ -432,7 +432,10 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
       if (!saleValue.ok) return { error: "invalid_sale_value" };
       const routed = routeLead(body);
       const publicProtocol = protocol();
-      const link = handoffLink(phone.e164, publicProtocol);
+      const link = handoffLink(phone.e164, publicProtocol, {
+        customerName: String(body.name || '').trim(),
+        responsibleName: routed.user.name
+      });
       const createdAt = new Date().toISOString();
       const crmCase = {
         id: randomUUID(),
@@ -691,7 +694,10 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
       if (!found) return { error: "case_not_found" };
       const routed = routeLead(body);
       const publicProtocol = protocol();
-      const link = handoffLink(found.contact.phone, publicProtocol);
+      const link = handoffLink(found.contact.phone, publicProtocol, {
+        customerName: found.contact.name,
+        responsibleName: routed.user.name
+      });
       const handoff = {
         id: randomUUID(),
         case_id: caseId,
@@ -1149,7 +1155,10 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
     };
   }
   function shapeHandoff(row) {
-    const link = handoffLink(row.contact_phone, row.protocol);
+    const link = handoffLink(row.contact_phone, row.protocol, {
+      customerName: row.contact_name,
+      responsibleName: row.destination_name
+    });
     return {
       id: row.id,
       case_id: row.case_id,
@@ -2068,7 +2077,10 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
         returning id, case_id, protocol, created_at::text
       `, [ctx.org.id, caseId, ctx.mainAccount.id, routed.account.id, routed.user.id, publicProtocol, JSON.stringify({ transfer: true }), body.summary || existing.need || null]);
       await pool.query("insert into handoff_events(handoff_id,type,payload,idempotency_key) values($1,'created',$2,$3)", [result.id, JSON.stringify({ reason: "Transferencia manual pelo CRM" }), `transfer:${result.id}`]);
-      const link = handoffLink(existing.contact_phone, publicProtocol);
+      const link = handoffLink(existing.contact_phone, publicProtocol, {
+        customerName: existing.contact_name,
+        responsibleName: routed.name
+      });
       return {
         case: shapeCase(await one(`${caseSelect} where c.id=$1 order by h.created_at desc limit 1`, [caseId])),
         handoff: {
@@ -2123,7 +2135,10 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
         limit 1
       `, [caseId]);
       if (!row) return { error: "case_not_found" };
-      const link = handoffLink(row.contact_phone, row.protocol);
+      const link = handoffLink(row.contact_phone, row.protocol, {
+        customerName: row.contact_name,
+        responsibleName: row.destination_name
+      });
       const message = externalHandoffMessage({
         customerName: row.contact_name || null,
         firstName: row.contact_name ? String(row.contact_name).split(/\s+/)[0] : null,
