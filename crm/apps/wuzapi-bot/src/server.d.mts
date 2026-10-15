@@ -12,6 +12,7 @@ export type ConversationState = {
 
 export function appendCrmCaseLink(message: string, baseUrl: string, caseId: string): string;
 export function commercialQualificationReply(conversation: ConversationState): string;
+export function conversationalPunctuation(value: string): string;
 export function enforceCommercialBoundaries(reply: string, conversation: ConversationState): string;
 export function extractFactsSmart(text: string): { name: string; city: string; uf: string; product: string };
 export function greetingReply(text: string): string;

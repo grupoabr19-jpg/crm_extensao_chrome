@@ -133,6 +133,13 @@ function normalizeText(value) {
     .toLowerCase();
 }
 
+function conversationalPunctuation(value) {
+  return String(value || '')
+    .replace(/\s*[—–]\s*/g, '; ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 function titleCase(value) {
   return String(value || '')
     .trim()
@@ -404,7 +411,7 @@ function greetingReply(text) {
   const normalized = normalizeText(text).replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim();
   if (!/^(?:(?:oi|ola)\s*)?(?:bom dia|boa tarde|boa noite)?$/.test(normalized) || !normalized) return '';
   const greeting = normalized.includes('bom dia') ? 'Bom dia' : normalized.includes('boa tarde') ? 'Boa tarde' : normalized.includes('boa noite') ? 'Boa noite' : 'Olá';
-  return `${greeting}! Sou o Abraão, parceiro de negócios do Grupo ABR. Que bom falar com você — como posso ajudar?`;
+  return `${greeting}! Sou o Abraão, parceiro de negócios do Grupo ABR. Que bom falar com você. Como posso ajudar?`;
 }
 
 function productLabel(product) {
@@ -566,7 +573,7 @@ async function askGroq(text, phone) {
           content:
             `Voce e ${botName}, parceiro de negocios do ${companyName === 'ABR' ? 'Grupo ABR' : companyName}. ` +
             'Apresente-se com essa identidade no primeiro contato. Responda em portugues do Brasil, em tom caloroso, amigavel, educado e gentil, mas sem enrolacao. ' +
-            'Use no maximo tres frases curtas, sem emoji, lista, markdown ou explicacao de regras internas. Primeiro reconheca o que o cliente disse e depois faca no maximo uma pergunta util. ' +
+            'Use no maximo tres frases curtas, sem emoji, lista, markdown ou explicacao de regras internas. Nunca use travessao; prefira ponto, virgula ou ponto e virgula, como em uma conversa natural de WhatsApp. Primeiro reconheca o que o cliente disse e depois faca no maximo uma pergunta util. ' +
             'Seu papel e conversar, explicar os produtos do catalogo conhecido, tirar duvidas gerais e enriquecer a ficha antes de encaminhar ao vendedor. ' +
             'Intencao de compra nao e ordem de transferencia: converse e qualifique. Pergunte, sem interrogatorio e apenas quando fizer sentido, nome ou empresa, cidade/UF, produto ou formato desejado, aplicacao, medidas, quantidade aproximada e momento da compra. ' +
             'Voce nunca faz, prepara, calcula ou oferece orcamentos ou cotacoes; nunca informa ou estima preco, desconto, estoque, prazo de entrega, condicao de pagamento, credito ou negociacao. ' +
@@ -600,7 +607,7 @@ async function askGroq(text, phone) {
 
 function qualificationReply(conversation) {
   if (!conversation?.product) {
-    return 'Entendi. Será um prazer ajudar — qual produto ou tipo de material você procura?';
+    return 'Entendi. Será um prazer ajudar. Qual produto ou tipo de material você procura?';
   }
   if (!conversation?.city) {
     return `Ótimo, entendi seu interesse em ${conversation.product}. Em qual cidade e UF será o atendimento?`;
@@ -813,10 +820,11 @@ async function sendWhatsAppText(phone, body) {
 }
 
 async function sendCustomerReply(phone, body) {
-  const result = await sendWhatsAppText(phone, body);
+  const reply = conversationalPunctuation(body);
+  const result = await sendWhatsAppText(phone, reply);
   const conversation = conversations.get(phone);
   if (conversation) {
-    conversation.messages.push({ from: 'assistant', text: body, at: new Date().toISOString() });
+    conversation.messages.push({ from: 'assistant', text: reply, at: new Date().toISOString() });
     conversation.messages = conversation.messages.slice(-MAX_HISTORY);
     conversations.set(phone, conversation);
   }
@@ -991,4 +999,4 @@ if (process.env.BOT_TEST_MODE !== 'true') {
   });
 }
 
-export { appendCrmCaseLink, commercialQualificationReply, enforceCommercialBoundaries, extractFactsSmart, greetingReply, handoffSummary, hasQualificationDetail, isReadyForHandoff, missingQuestions, purchaseInterestReply, qualificationReply, requestedPietra, resolveNamedOperator, wantsHumanSmart, wantsPortfolio, wantsPurchase, wantsQuote };
+export { appendCrmCaseLink, commercialQualificationReply, conversationalPunctuation, enforceCommercialBoundaries, extractFactsSmart, greetingReply, handoffSummary, hasQualificationDetail, isReadyForHandoff, missingQuestions, purchaseInterestReply, qualificationReply, requestedPietra, resolveNamedOperator, wantsHumanSmart, wantsPortfolio, wantsPurchase, wantsQuote };

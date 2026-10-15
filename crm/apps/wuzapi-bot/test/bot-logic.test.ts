@@ -37,7 +37,7 @@ describe("WuzAPI bot conversation logic", () => {
   });
 
   it("introduces Abraão warmly and distinguishes purchase from handoff intent", () => {
-    expect(bot.greetingReply("oi boa tarde")).toBe("Boa tarde! Sou o Abraão, parceiro de negócios do Grupo ABR. Que bom falar com você — como posso ajudar?");
+    expect(bot.greetingReply("oi boa tarde")).toBe("Boa tarde! Sou o Abraão, parceiro de negócios do Grupo ABR. Que bom falar com você. Como posso ajudar?");
     expect(bot.wantsHumanSmart("quero comprar aço")).toBe(false);
     expect(bot.wantsHumanSmart("quero fazer orçamento")).toBe(false);
     expect(bot.wantsHumanSmart("preciso de uma cotação")).toBe(false);
@@ -45,6 +45,11 @@ describe("WuzAPI bot conversation logic", () => {
     expect(bot.wantsQuote("quanto custa a telha?")).toBe(true);
     expect(bot.wantsPurchase("quero comprar aço")).toBe(true);
     expect(bot.purchaseInterestReply({ product: "Aco" })).toContain("interesse em aço");
+  });
+
+  it("never sends literary dashes in customer dialogue", () => {
+    expect(bot.conversationalPunctuation("Entendi — posso ajudar. Material – cidade?"))
+      .toBe("Entendi; posso ajudar. Material; cidade?");
   });
 
   it("qualifies quote requests before handoff but never blocks an explicit transfer", () => {
