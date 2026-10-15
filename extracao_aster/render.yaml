@@ -95,3 +95,59 @@ services:
         sync: false
       - key: MAIL_CC
         sync: false
+      - key: CRM_API_URL
+        value: http://164.152.38.135:10000
+      - key: CRM_ASTER_SYNC_TOKEN
+        sync: false
+  - type: cron
+    name: grupoabr-aster-varejo-diario
+    runtime: docker
+    schedule: "0 8 * * *"
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: python main.py
+    envVars:
+      - key: BUSINESS_TIMEZONE
+        value: America/Sao_Paulo
+      - key: REFERENCE_DATE_MODE
+        value: previous_calendar_day
+      - key: DRY_RUN
+        value: "false"
+      - key: ASTER_CONFLICT_POLICY
+        value: skip_manual
+      - key: OUTPUT_DIR
+        value: output
+      - key: ASTER_URL
+        sync: false
+      - key: ASTER_USERNAME
+        sync: false
+      - key: ASTER_PASSWORD
+        sync: false
+      - key: ASTER_USERNAME_SELECTOR
+        sync: false
+      - key: ASTER_PASSWORD_SELECTOR
+        sync: false
+      - key: ASTER_LOGIN_BUTTON_SELECTOR
+        sync: false
+      - key: ASTER_REPORT_URL
+        sync: false
+      - key: ASTER_REPORT_READY_SELECTOR
+        sync: false
+      - key: ASTER_REPORT_TABLE_SELECTOR
+        sync: false
+      - key: ASTER_REPORT_DOWNLOAD_SELECTOR
+        sync: false
+      - key: ASTER_REPORT_CARD_SELECTOR
+        sync: false
+      - key: ASTER_REPORT_START_DATE_SELECTOR
+        sync: false
+      - key: ASTER_REPORT_END_DATE_SELECTOR
+        sync: false
+      - key: SHEETS_V2_URL
+        sync: false
+      - key: SHEETS_V2_TOKEN
+        sync: false
+      - key: CRM_API_URL
+        value: http://164.152.38.135:10000
+      - key: CRM_ASTER_SYNC_TOKEN
+        sync: false

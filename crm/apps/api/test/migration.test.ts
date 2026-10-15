@@ -18,6 +18,7 @@ beforeAll(async () => {
   org = (await q("insert into organizations(name) values('ABR teste') returning id"))[0].id;
   await db.exec(sql("0014_operator_transfer_profiles.sql"));
   await db.exec(sql("0015_wholesale_ddd_routes.sql"));
+  await db.exec(sql("0016_aster_sales_snapshots.sql"));
   await db.exec(sql("seed_reference_demo.sql").replaceAll(":'org_id'", `'${org}'`));
 }, 60_000);
 
@@ -99,5 +100,11 @@ describe("migration 0001 em PostgreSQL real (PGlite)", () => {
     const h = (await q("insert into handoffs(organization_id,case_id,source_account_id,destination_account_id,destination_user_id,protocol,routing_inputs,expires_at) values($1,$2,$3,$3,$4,'ABR-0000-0001','{}',now()+interval '1 day') returning id", [org, cs, a, u]))[0].id;
     await db.query("insert into handoff_events(handoff_id,type,idempotency_key) values($1,'created','k1')", [h]);
     expect(await fails("insert into handoff_events(handoff_id,type,idempotency_key) values($1,'created','k1')", [h])).toBe(true);
+  });
+  it("mantém uma fotografia idempotente de vendas do Aster por vendedor e dia", async () => {
+    await db.query("insert into aster_sales_snapshots(organization_id,reference_date,vendor_name,vendor_key,weight_kg,value_brl) values($1,'2026-10-14','VARE - JOSIANE LIMA','JOSIANE LIMA',1250,9800)", [org]);
+    expect(await fails("insert into aster_sales_snapshots(organization_id,reference_date,vendor_name,vendor_key,weight_kg,value_brl) values($1,'2026-10-14','JOSIANE LIMA','JOSIANE LIMA',1,1)", [org])).toBe(true);
+    const snapshot = (await q("select weight_kg::float8,value_brl::float8 from aster_sales_snapshots where organization_id=$1", [org]))[0];
+    expect(snapshot).toEqual({ weight_kg: 1250, value_brl: 9800 });
   });
 });

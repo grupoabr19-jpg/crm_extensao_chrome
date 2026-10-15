@@ -32,6 +32,10 @@ describe("CRM WhatsApp extension panel", () => {
     expect(panelSource).not.toContain("$('activeCase')");
     const win = makeWindow();
     expect(() => win.eval(panelSource)).not.toThrow();
-    expect(win.document.querySelector("#abr-crm-host")).toBeTruthy();
+    const host = win.document.querySelector("#abr-crm-host") as HTMLElement;
+    expect(host).toBeTruthy();
+    expect(host.shadowRoot?.querySelector("#launcher")).toBeTruthy();
+    expect(host.shadowRoot?.querySelector(".rail")).toBeNull();
+    expect(host.shadowRoot?.querySelector("#drawer")?.classList.contains("open")).toBe(false);
   });
 });

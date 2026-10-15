@@ -50,4 +50,13 @@ describe("CRM web page", () => {
     expect(html).toContain('won_order_number_required');
     expect(html).toContain('Venda perdida enviada ao funil de reativação.');
   });
+  it("keeps team routing admin-only and sales metrics in collapsed groups", () => {
+    expect(html).toContain("$('navAdmin').hidden = session.user.role !== 'admin'");
+    expect(html).toContain("state.user?.role !== 'admin'");
+    expect(html).toContain('id="sellerSalesGroup"');
+    expect(html).toContain('id="teamSalesGroup"');
+    expect(html).not.toContain('id="salesTotal"');
+    expect(html).not.toContain('id="salesRows"');
+    expect(html).toContain("$('kpis').hidden = name !== 'board'");
+  });
 });

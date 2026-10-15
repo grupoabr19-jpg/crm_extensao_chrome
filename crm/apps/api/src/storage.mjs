@@ -589,9 +589,35 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
         sellers: [...new Set(all.map((item) => item.seller).filter(Boolean))].sort()
       };
     },
-    listSales: async () => {
+    ingestAsterDaily: async (body) => {
+      const referenceDate = String(body.reference_date || "");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(referenceDate) || !Array.isArray(body.items)) return { error: "invalid_aster_payload" };
+      db.asterSales ||= [];
+      const incoming = body.items.map((item) => ({
+        reference_date: referenceDate,
+        vendor_name: String(item.vendor || "").trim(),
+        vendor_key: normalizeText(String(item.vendor || "").replace(/^(?:VARE|VCORP|VARC|ATF)\s*-\s*/i, "")),
+        sales_type: String(item.type || "").trim(), region: String(item.region || "").trim(), segment: String(item.segment || "").trim(),
+        weight_kg: Math.max(0, Number(item.weight_kg || 0)), value_brl: Math.max(0, Number(item.value_brl || 0)), synced_at: new Date().toISOString()
+      })).filter((item) => item.vendor_name && item.vendor_key);
+      db.asterSales = db.asterSales.filter((item) => item.reference_date !== referenceDate).concat(incoming);
+      return { accepted: incoming.length, reference_date: referenceDate };
+    },
+    listSales: async (options = {}) => {
       const items = db.cases.filter((item) => !item.deleted_at && item.won_at);
-      return { items, total: items.length, totalValue: items.reduce((sum, item) => sum + Number(item.fields.saleValue || 0), 0) };
+      const sellerItems = items.filter((item) => item.owner?.id === options.userId);
+      const snapshots = db.asterSales || [];
+      const latestDate = snapshots.map((item) => item.reference_date).sort().at(-1) || null;
+      const latest = snapshots.filter((item) => item.reference_date === latestDate);
+      const sellerKey = normalizeText(options.userName || "");
+      const sellerAster = latest.filter((item) => item.vendor_key === sellerKey);
+      const summarize = (wonItems, asterItems) => ({
+        items: wonItems,
+        total: wonItems.length,
+        totalValue: wonItems.reduce((sum, item) => sum + Number(item.fields.saleValue || 0), 0),
+        aster: { referenceDate: latestDate, items: asterItems, value: asterItems.reduce((sum, item) => sum + Number(item.value_brl || 0), 0), weightKg: asterItems.reduce((sum, item) => sum + Number(item.weight_kg || 0), 0) }
+      });
+      return { items, total: items.length, totalValue: items.reduce((sum, item) => sum + Number(item.fields.saleValue || 0), 0), seller: summarize(sellerItems, sellerAster), team: summarize(items, latest) };
     },
     importCustomerRegistry: async () => ({ error: "persistent_database_required" }),
     listCases: async (options = {}) => {
@@ -1716,11 +1742,10 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
         ) options where value is not null order by value
       `, [ctx.org.id]);
       const sellers = await many(`
-        select value from (
-          select u.display_name value from users u where u.organization_id=$1 and u.status='active' and u.role in ('seller','supervisor')
-          union
-          select nullif(btrim(co.customer_profile->>'seller'),'') value from contacts co where co.organization_id=$1
-        ) options where value is not null order by value
+        select distinct u.display_name value
+        from users u
+        where u.organization_id=$1 and u.status='active' and u.role in ('seller','supervisor')
+        order by value
       `, [ctx.org.id]);
       if (!hasFilters) {
         return {
@@ -1784,14 +1809,61 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
         sellers: sellers.map((item) => item.value)
       };
     },
-    listSales: async () => {
+    ingestAsterDaily: async (body) => {
+      const ctx = await ready();
+      const referenceDate = String(body.reference_date || "");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(referenceDate) || !Array.isArray(body.items)) return { error: "invalid_aster_payload" };
+      const items = body.items.map((item) => ({
+        vendorName: String(item.vendor || "").trim(),
+        vendorKey: normalizeText(String(item.vendor || "").replace(/^(?:VARE|VCORP|VARC|ATF)\s*-\s*/i, "")),
+        salesType: String(item.type || "").trim() || null,
+        region: String(item.region || "").trim() || null,
+        segment: String(item.segment || "").trim() || null,
+        weightKg: Math.max(0, Number(item.weight_kg || 0)),
+        valueBrl: Math.max(0, Number(item.value_brl || 0))
+      })).filter((item) => item.vendorName && item.vendorKey);
+      const client = await pool.connect();
+      try {
+        await client.query("begin");
+        await client.query("delete from aster_sales_snapshots where organization_id=$1 and reference_date=$2", [ctx.org.id, referenceDate]);
+        for (const item of items) {
+          await client.query(`
+            insert into aster_sales_snapshots(organization_id,reference_date,vendor_name,vendor_key,sales_type,region,segment,weight_kg,value_brl)
+            values($1,$2,$3,$4,$5,$6,$7,$8,$9)
+          `, [ctx.org.id, referenceDate, item.vendorName, item.vendorKey, item.salesType, item.region, item.segment, item.weightKg, item.valueBrl]);
+        }
+        await client.query("commit");
+      } catch (error) {
+        await client.query("rollback").catch(() => {});
+        throw error;
+      } finally {
+        client.release();
+      }
+      return { accepted: items.length, reference_date: referenceDate };
+    },
+    listSales: async (options = {}) => {
       const ctx = await ready();
       const rows = await many(`${caseSelect} where c.organization_id=$1 and c.deleted_at is null and c.won_at is not null order by c.won_at desc limit 1000`, [ctx.org.id]);
       const items = Array.from(new Map(rows.map((row) => {
         const item = shapeCase(row);
         return [item.id, item];
       })).values());
-      return { items, total: items.length, totalValue: items.reduce((sum, item) => sum + Number(item.fields.saleValue || 0), 0) };
+      const sellerItems = items.filter((item) => item.owner?.id === options.userId);
+      const latestDateRow = await one("select max(reference_date)::text reference_date from aster_sales_snapshots where organization_id=$1", [ctx.org.id]);
+      const latestDate = latestDateRow?.reference_date || null;
+      const latest = latestDate ? await many(`
+        select vendor_name, vendor_key, sales_type, region, segment, weight_kg::float8, value_brl::float8, reference_date::text, synced_at::text
+        from aster_sales_snapshots where organization_id=$1 and reference_date=$2 order by value_brl desc, vendor_name
+      `, [ctx.org.id, latestDate]) : [];
+      const sellerKey = normalizeText(options.userName || "");
+      const sellerAster = latest.filter((item) => item.vendor_key === sellerKey);
+      const summarize = (wonItems, asterItems) => ({
+        items: wonItems,
+        total: wonItems.length,
+        totalValue: wonItems.reduce((sum, item) => sum + Number(item.fields.saleValue || 0), 0),
+        aster: { referenceDate: latestDate, items: asterItems, value: asterItems.reduce((sum, item) => sum + Number(item.value_brl || 0), 0), weightKg: asterItems.reduce((sum, item) => sum + Number(item.weight_kg || 0), 0) }
+      });
+      return { items, total: items.length, totalValue: items.reduce((sum, item) => sum + Number(item.fields.saleValue || 0), 0), seller: summarize(sellerItems, sellerAster), team: summarize(items, latest) };
     },
     importCustomerRegistry: async (plan) => {
       const ctx = await ready();

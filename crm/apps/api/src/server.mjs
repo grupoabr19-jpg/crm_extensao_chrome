@@ -16,6 +16,7 @@ const PORT = Number(process.env.PORT || 10000);
 const ADMIN_ORIGIN = process.env.ADMIN_ORIGIN || "http://localhost:5173";
 const ALLOWED_EXTENSION_IDS = (process.env.ALLOWED_EXTENSION_IDS || "").split(",").map((s) => s.trim()).filter(Boolean);
 const API_ADMIN_TOKEN = process.env.API_ADMIN_TOKEN || "";
+const ASTER_SYNC_TOKEN = process.env.ASTER_SYNC_TOKEN || "";
 const AUTH_SIGNING_SECRET = process.env.AUTH_SIGNING_SECRET || cryptoRandomBytes(32).toString("hex");
 const GROQ_BASE_URL = process.env.GROQ_BASE_URL || "https://api.groq.com/openai/v1";
 const GROQ_VISION_MODEL = process.env.GROQ_VISION_MODEL || "qwen/qwen3.8-27b";
@@ -321,6 +322,19 @@ async function handler(req, res) {
       return send(res, 200, { token: issueToken(result.user), user: result.user });
     }
 
+    if (req.method === "POST" && url.pathname === "/v1/integrations/aster/daily") {
+      if (!ASTER_SYNC_TOKEN) return send(res, 503, { error: "aster_sync_not_configured" });
+      const supplied = String(req.headers.authorization || "").replace(/^Bearer\s+/i, "");
+      const got = Buffer.from(supplied);
+      const expected = Buffer.from(ASTER_SYNC_TOKEN);
+      if (got.length !== expected.length || !timingSafeEqual(got, expected)) return send(res, 401, { error: "unauthorized" });
+      const body = await readBody(req, 2 * 1024 * 1024);
+      await storage.ready();
+      const result = await storage.ingestAsterDaily(body);
+      if (result.error) return send(res, 422, result);
+      return send(res, 200, result);
+    }
+
     if (url.pathname.startsWith("/v1/") && url.pathname !== "/v1/auth/login") {
       if (!requireRoles(req, res, ["admin", "supervisor", "sdr", "seller", "department_staff"])) return;
     }
@@ -446,12 +460,13 @@ async function handler(req, res) {
     }
 
     if (req.method === "GET" && url.pathname === "/v1/sellers") {
+      if (!requireRoles(req, res, ["admin"])) return;
       await storage.ready();
       return send(res, 200, await storage.listSellers());
     }
 
     if (req.method === "POST" && url.pathname === "/v1/sellers") {
-      if (!requireRoles(req, res, ["admin", "supervisor"])) return;
+      if (!requireRoles(req, res, ["admin"])) return;
       const body = await readBody(req);
       await storage.ready();
       const result = await storage.createSeller(body);
@@ -461,7 +476,7 @@ async function handler(req, res) {
 
     const sellerDelete = /^\/v1\/sellers\/([^/]+)$/.exec(url.pathname);
     if (req.method === "DELETE" && sellerDelete) {
-      if (!requireRoles(req, res, ["admin", "supervisor"])) return;
+      if (!requireRoles(req, res, ["admin"])) return;
       await storage.ready();
       const result = await storage.deactivateSeller(decodeURIComponent(sellerDelete[1]));
       if (result.error === "seller_not_found") return send(res, 404, result);
@@ -531,8 +546,9 @@ async function handler(req, res) {
     }
 
     if (req.method === "GET" && url.pathname === "/v1/reports/sales") {
+      const user = userFromRequest(req);
       await storage.ready();
-      return send(res, 200, await storage.listSales());
+      return send(res, 200, await storage.listSales({ userId: user.sub, userName: user.name }));
     }
 
     if (req.method === "GET" && url.pathname === "/v1/reports/cases.csv") {

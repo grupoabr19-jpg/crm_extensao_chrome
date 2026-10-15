@@ -12,13 +12,14 @@ class Config:
     sheets_url: str; sheets_token: str; trigger_token: str; spreadsheet_url: str
     email_enabled: bool; smtp_host: str; smtp_port: int; smtp_user: str; smtp_password: str
     mail_from: str; mail_to: tuple[str, ...]; mail_cc: tuple[str, ...]; dry_run: bool; conflict_policy: str; output_dir: str
+    crm_api_url: str; crm_sync_token: str
 
     @classmethod
     def load(cls) -> "Config":
         def s(name: str, default: str = "") -> str: return os.getenv(name, default).strip()
         def b(name: str, default: bool = False) -> bool: return s(name, str(default)).lower() in {"1", "true", "yes", "on"}
         def emails(name: str) -> tuple[str, ...]: return tuple(value.strip() for value in s(name).replace(";", ",").split(",") if value.strip())
-        return cls(s("BUSINESS_TIMEZONE", "America/Sao_Paulo"), s("ASTER_URL"), s("ASTER_REPORT_URL"), s("ASTER_USERNAME"), s("ASTER_PASSWORD"), s("ASTER_USERNAME_SELECTOR"), s("ASTER_PASSWORD_SELECTOR"), s("ASTER_LOGIN_BUTTON_SELECTOR"), s("ASTER_REPORT_READY_SELECTOR"), s("ASTER_REPORT_CARD_SELECTOR"), s("ASTER_REPORT_DOWNLOAD_SELECTOR"), s("ASTER_REPORT_START_DATE_SELECTOR"), s("ASTER_REPORT_END_DATE_SELECTOR"), s("SHEETS_V2_URL"), s("SHEETS_V2_TOKEN"), s("TRIGGER_TOKEN"), s("SPREADSHEET_URL"), b("EMAIL_ENABLED"), s("SMTP_HOST"), int(s("SMTP_PORT", "587") or 587), s("SMTP_USERNAME"), s("SMTP_PASSWORD"), s("MAIL_FROM"), emails("MAIL_TO"), emails("MAIL_CC"), b("DRY_RUN", True), s("ASTER_CONFLICT_POLICY", "skip_manual"), s("OUTPUT_DIR", "output"))
+        return cls(s("BUSINESS_TIMEZONE", "America/Sao_Paulo"), s("ASTER_URL"), s("ASTER_REPORT_URL"), s("ASTER_USERNAME"), s("ASTER_PASSWORD"), s("ASTER_USERNAME_SELECTOR"), s("ASTER_PASSWORD_SELECTOR"), s("ASTER_LOGIN_BUTTON_SELECTOR"), s("ASTER_REPORT_READY_SELECTOR"), s("ASTER_REPORT_CARD_SELECTOR"), s("ASTER_REPORT_DOWNLOAD_SELECTOR"), s("ASTER_REPORT_START_DATE_SELECTOR"), s("ASTER_REPORT_END_DATE_SELECTOR"), s("SHEETS_V2_URL"), s("SHEETS_V2_TOKEN"), s("TRIGGER_TOKEN"), s("SPREADSHEET_URL"), b("EMAIL_ENABLED"), s("SMTP_HOST"), int(s("SMTP_PORT", "587") or 587), s("SMTP_USERNAME"), s("SMTP_PASSWORD"), s("MAIL_FROM"), emails("MAIL_TO"), emails("MAIL_CC"), b("DRY_RUN", True), s("ASTER_CONFLICT_POLICY", "skip_manual"), s("OUTPUT_DIR", "output"), s("CRM_API_URL"), s("CRM_ASTER_SYNC_TOKEN"))
 
     def reference_date(self, override: str | None = None) -> date:
         return datetime.strptime(override, "%Y-%m-%d").date() if override else datetime.now(ZoneInfo(self.timezone)).date() - timedelta(days=1)
