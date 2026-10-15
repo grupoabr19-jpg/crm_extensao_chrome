@@ -3,6 +3,7 @@ export type ConversationState = {
   pendingHandoff?: boolean;
   purchaseIntent?: boolean;
   commercialHandoffRequested?: boolean;
+  awaitingField?: string;
   name?: string;
   city?: string;
   uf?: string;

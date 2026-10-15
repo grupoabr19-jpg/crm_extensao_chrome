@@ -36,6 +36,15 @@ describe("WuzAPI bot conversation logic", () => {
     expect(bot.wantsHumanSmart(message)).toBe(false);
   });
 
+  it("does not infer Jundiai from bom dia or treat cobertura as the customer name", () => {
+    expect(bot.extractFactsSmart("oi, bom dia\neu quero comprar telha\ncobertura")).toEqual({
+      name: "",
+      city: "",
+      uf: "",
+      product: "Telha"
+    });
+  });
+
   it("introduces Abraão warmly and distinguishes purchase from handoff intent", () => {
     expect(bot.greetingReply("oi boa tarde")).toBe("Boa tarde! Sou o Abraão, parceiro de negócios do Grupo ABR. Que bom falar com você. Como posso ajudar?");
     expect(bot.wantsHumanSmart("quero comprar aço")).toBe(false);
@@ -44,7 +53,10 @@ describe("WuzAPI bot conversation logic", () => {
     expect(bot.wantsQuote("quero fazer orçamento")).toBe(true);
     expect(bot.wantsQuote("quanto custa a telha?")).toBe(true);
     expect(bot.wantsPurchase("quero comprar aço")).toBe(true);
-    expect(bot.purchaseInterestReply({ product: "Aco" })).toContain("interesse em aço");
+    expect(bot.purchaseInterestReply({ product: "Aco" })).toContain("como posso te chamar");
+    expect(bot.purchaseInterestReply({ name: "Thiago", product: "Aco" })).toContain("cidade e UF");
+    expect(bot.purchaseInterestReply({ name: "Thiago", city: "Cambui", uf: "MG", product: "Aco" }))
+      .toContain("interesse em aço");
   });
 
   it("never sends literary dashes in customer dialogue", () => {
@@ -52,20 +64,20 @@ describe("WuzAPI bot conversation logic", () => {
       .toBe("Entendi; posso ajudar. Material; cidade?");
   });
 
-  it("qualifies quote requests before handoff but never blocks an explicit transfer", () => {
+  it("requires qualification before every handoff, including an explicit request", () => {
     const messages = [
       { from: "customer", text: "quero orçamento de telhas" },
       { from: "customer", text: "é para a cobertura de um galpão" }
     ];
     expect(bot.hasQualificationDetail({ messages })).toBe(true);
     expect(bot.hasQualificationDetail({ messages: [{ from: "customer", text: "quero comprar telhas" }] })).toBe(false);
-    expect(bot.commercialQualificationReply({ product: "Telha", city: "Cambui" }))
+    expect(bot.commercialQualificationReply({ name: "Thiago", product: "Telha", city: "Cambui", uf: "MG" }))
       .toContain("aplicação, medida ou quantidade aproximada");
     expect(bot.wantsHumanSmart("transfere pra Pietra")).toBe(true);
   });
 
   it("blocks commercial promises while allowing consultative qualification", () => {
-    const conversation = { product: "Aco", city: "Cambui" };
+    const conversation = { name: "Thiago", product: "Aco", city: "Cambui", uf: "MG" };
     expect(bot.enforceCommercialBoundaries("Posso preparar um orçamento para você.", conversation))
       .toContain("aplicação, medida ou quantidade aproximada");
     expect(bot.enforceCommercialBoundaries("Temos esse material em estoque para entrega amanhã.", conversation))
@@ -93,11 +105,25 @@ describe("WuzAPI bot conversation logic", () => {
       .toContain("Ficha no CRM: https://crm.example.com/crm?case=case-123");
   });
 
-  it("only transfers after an explicit request and requires city, not a specific product", () => {
-    expect(bot.isReadyForHandoff({ handoffAt: 0, pendingHandoff: false, city: "Cambui", product: "Telha" }, "")).toBe(false);
-    expect(bot.isReadyForHandoff({ handoffAt: 0, pendingHandoff: true, city: "Cambui", product: "" }, "")).toBe(true);
-    expect(bot.missingQuestions({ city: "Cambui" })).toEqual([]);
-    expect(bot.missingQuestions({ city: "" })).toEqual(["sua cidade"]);
+  it("transfers only after name, city, UF, product and a useful detail", () => {
+    const qualified = {
+      handoffAt: 0,
+      pendingHandoff: true,
+      name: "Thiago",
+      city: "Cambui",
+      uf: "MG",
+      product: "Telha",
+      messages: [{ from: "customer", text: "é para cobertura" }]
+    };
+    expect(bot.isReadyForHandoff({ ...qualified, pendingHandoff: false }, "")).toBe(false);
+    expect(bot.isReadyForHandoff(qualified, "")).toBe(true);
+    expect(bot.isReadyForHandoff({ ...qualified, name: "" }, "")).toBe(false);
+    expect(bot.isReadyForHandoff({ ...qualified, city: "" }, "")).toBe(false);
+    expect(bot.isReadyForHandoff({ ...qualified, uf: "" }, "")).toBe(false);
+    expect(bot.isReadyForHandoff({ ...qualified, product: "" }, "")).toBe(false);
+    expect(bot.missingQuestions({ name: "" })).toEqual(["seu nome"]);
+    expect(bot.missingQuestions({ name: "Thiago", city: "" })).toEqual(["sua cidade"]);
+    expect(bot.missingQuestions({ name: "Thiago", city: "Cambui", uf: "" })).toEqual(["a UF"]);
   });
 
   it("recognizes a real Pietra request without treating ordinary seller mentions as commands", () => {

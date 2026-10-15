@@ -179,7 +179,7 @@ function closeEnough(value, expected) {
   const left = normalizeText(value).replace(/\s+/g, ' ').trim();
   const right = normalizeText(expected).replace(/\s+/g, ' ').trim();
   if (!left || !right) return false;
-  if (left === right || left.includes(right) || right.includes(left)) return true;
+  if (left === right) return true;
   const limit = right.length <= 5 ? 1 : right.length <= 8 ? 2 : 3;
   return editDistance(left, right) <= limit;
 }
@@ -256,20 +256,35 @@ function extractName(raw, commaParts, city, product) {
     if (!STOP_WORDS.has(first) && !extractProduct(extracted) && !canonicalCity(extracted)) return titleCase(extracted);
   }
   if (wantsPortfolio(raw)) return '';
-  const blocked = new Set([...words(city), ...words(product), ...PRODUCT_ALIASES.flatMap((item) => item.aliases.flatMap((alias) => words(alias)))]);
-  const candidate = words(raw).find((word) => word.length >= 3 && !STOP_WORDS.has(word) && !blocked.has(word) && !canonicalCity(word));
-  return candidate ? titleCase(candidate) : '';
+  return '';
+}
+
+function extractExpectedName(text) {
+  const clean = String(text || '').replace(/[^A-Za-zÀ-ÿ\s'-]/g, ' ').replace(/\s+/g, ' ').trim();
+  const parts = words(clean);
+  if (!clean || parts.length < 1 || parts.length > 4) return '';
+  const blocked = new Set([
+    ...STOP_WORDS,
+    'cobertura', 'telhado', 'galpao', 'obra', 'reforma', 'estrutura', 'fabricacao',
+    'cliente', 'final', 'industria', 'construtora', 'revenda', 'projeto'
+  ]);
+  if (parts.some((part) => blocked.has(part)) || extractProduct(clean) || canonicalCity(clean)) return '';
+  return titleCase(clean);
 }
 
 function upsertConversation(phone, text) {
-  const current = conversations.get(phone) || { phone, messages: [], name: '', city: '', uf: '', product: '', handoffAt: 0, pendingHandoff: false, purchaseIntent: false, commercialHandoffRequested: false, transferTarget: null };
+  const current = conversations.get(phone) || { phone, messages: [], name: '', city: '', uf: '', product: '', handoffAt: 0, pendingHandoff: false, purchaseIntent: false, commercialHandoffRequested: false, transferTarget: null, awaitingField: '' };
   current.messages.push({ from: 'customer', text, at: new Date().toISOString() });
   current.messages = current.messages.slice(-MAX_HISTORY);
   const facts = extractFactsSmart(current.messages.filter((message) => message.from === 'customer').map((message) => message.text).join('\n'));
-  current.name ||= facts.name;
+  const expectedName = current.awaitingField === 'name' ? extractExpectedName(text) : '';
+  current.name ||= expectedName || facts.name;
   current.city ||= facts.city;
   current.uf ||= facts.uf;
   current.product ||= facts.product;
+  if ((current.awaitingField === 'name' && current.name)
+    || (current.awaitingField === 'city' && current.city)
+    || (current.awaitingField === 'uf' && current.uf)) current.awaitingField = '';
   if (wantsHumanSmart(text)) current.pendingHandoff = true;
   conversations.set(phone, current);
   return current;
@@ -390,15 +405,30 @@ function hasQualificationDetail(conversation) {
     || /\b(obra|cobertura|telhado|galpao|serralheria|estrutura|fabricacao|revenda|industria|construtora|reforma|projeto|uso proprio|cliente final)\b/.test(customerText);
 }
 
+function nextRequiredQualification(conversation) {
+  if (!conversation?.name) return 'name';
+  if (!conversation?.city) return 'city';
+  if (!conversation?.uf) return 'uf';
+  if (!conversation?.product) return 'product';
+  if (!hasQualificationDetail(conversation)) return 'detail';
+  return '';
+}
+
 function isReadyForHandoff(conversation, text) {
   if (conversation.handoffAt && Date.now() - conversation.handoffAt < HANDOFF_LOCK_MS) return false;
-  return Boolean(conversation.pendingHandoff && conversation.city);
+  return Boolean(conversation.pendingHandoff && !nextRequiredQualification(conversation));
 }
 
 function missingQuestions(conversation) {
-  const missing = [];
-  if (!conversation.city) missing.push('sua cidade');
-  return missing;
+  const labels = {
+    name: 'seu nome',
+    city: 'sua cidade',
+    uf: 'a UF',
+    product: 'o produto',
+    detail: 'a aplicação, medida ou quantidade'
+  };
+  const next = nextRequiredQualification(conversation);
+  return next ? [labels[next]] : [];
 }
 
 function wantsPortfolio(text) {
@@ -424,11 +454,17 @@ function productLabel(product) {
 }
 
 function purchaseInterestReply(conversation) {
-  if (!conversation?.product) {
-    return 'Que bom saber do seu interesse! Temos diferentes linhas de aço para atender cada necessidade. Qual produto ou aplicação você procura?';
+  if (!conversation?.name) {
+    return 'Que bom saber do seu interesse! Antes de continuar, como posso te chamar?';
   }
-  if (hasQualificationDetail(conversation) && !conversation?.city) {
-    return `Que bom saber do seu interesse em ${productLabel(conversation.product)}! Já anotei a aplicação. Em qual cidade e UF será o atendimento?`;
+  if (!conversation?.city) {
+    return `Obrigado, ${conversation.name.split(/\s+/)[0]}! Em qual cidade e UF será o atendimento?`;
+  }
+  if (!conversation?.uf) {
+    return `${conversation.city} fica em qual UF?`;
+  }
+  if (!conversation?.product) {
+    return 'Perfeito. Qual produto ou tipo de material você procura?';
   }
   return `Que bom saber do seu interesse em ${productLabel(conversation.product)}! Quero entender sua necessidade para registrar tudo direitinho. Qual será a aplicação do material?`;
 }
@@ -575,11 +611,11 @@ async function askGroq(text, phone) {
             'Apresente-se com essa identidade no primeiro contato. Responda em portugues do Brasil, em tom caloroso, amigavel, educado e gentil, mas sem enrolacao. ' +
             'Use no maximo tres frases curtas, sem emoji, lista, markdown ou explicacao de regras internas. Nunca use travessao; prefira ponto, virgula ou ponto e virgula, como em uma conversa natural de WhatsApp. Primeiro reconheca o que o cliente disse e depois faca no maximo uma pergunta util. ' +
             'Seu papel e conversar, explicar os produtos do catalogo conhecido, tirar duvidas gerais e enriquecer a ficha antes de encaminhar ao vendedor. ' +
-            'Intencao de compra nao e ordem de transferencia: converse e qualifique. Pergunte, sem interrogatorio e apenas quando fizer sentido, nome ou empresa, cidade/UF, produto ou formato desejado, aplicacao, medidas, quantidade aproximada e momento da compra. ' +
+            'Intencao de compra nao e ordem de transferencia: converse e qualifique. Siga sempre esta ordem, uma pergunta por vez: nome de tratamento, cidade e UF, produto, depois aplicacao, medida ou quantidade. ' +
             'Voce nunca faz, prepara, calcula ou oferece orcamentos ou cotacoes; nunca informa ou estima preco, desconto, estoque, prazo de entrega, condicao de pagamento, credito ou negociacao. ' +
             'Nunca cite, avalie ou compare concorrentes. Nunca prometa disponibilidade, resultado tecnico, certificacao, reserva, entrega, contato ou fechamento. Nao solicite documentos, senha, dados bancarios ou de cartao. ' +
             'Se pedirem preco, orcamento ou cotacao, diga com naturalidade que o vendedor responsavel cuidara disso e aproveite para coletar somente um dado util que ainda esteja faltando. ' +
-            'Quantidade, medida, aplicacao e nome ajudam a ficha, mas nao sao condicao obrigatoria se o cliente pedir explicitamente para falar com um vendedor. ' +
+            'Nunca transfira antes de registrar nome de tratamento, cidade, UF, produto e pelo menos um detalhe da necessidade, como aplicacao, medida ou quantidade. Isso tambem vale quando o cliente pedir um vendedor explicitamente. ' +
             'Nao peca de novo um dado que ja foi informado e nunca diga que o cliente ainda precisa confirmar cidade se ela estiver nos dados ja informados. ' +
             'Quando perguntarem pelo portfolio, informe que trabalhamos com telhas (incluindo Telhas PIR ABR Telhas), perfil estrutural, tubos e metalons, vergalhao, malha e trelica. ' +
             'Conhecimento comercial: telhas PIR devem ser tratadas e vendidas como ABR Telhas. ' +
@@ -606,23 +642,48 @@ async function askGroq(text, phone) {
 }
 
 function qualificationReply(conversation) {
-  if (!conversation?.product) {
-    return 'Entendi. Será um prazer ajudar. Qual produto ou tipo de material você procura?';
+  if (!conversation?.name) {
+    return 'Será um prazer ajudar. Como posso te chamar?';
   }
   if (!conversation?.city) {
-    return `Ótimo, entendi seu interesse em ${conversation.product}. Em qual cidade e UF será o atendimento?`;
+    return `Obrigado, ${conversation.name.split(/\s+/)[0]}! Em qual cidade e UF será o atendimento?`;
+  }
+  if (!conversation?.uf) {
+    return `${conversation.city} fica em qual UF?`;
+  }
+  if (!conversation?.product) {
+    return 'Entendi. Será um prazer ajudar. Qual produto ou tipo de material você procura?';
   }
   return `Perfeito, já registrei seu interesse em ${conversation.product} para ${conversation.city}. Qual será a aplicação, medida ou quantidade aproximada?`;
 }
 
 function commercialQualificationReply(conversation) {
+  if (!conversation?.name) {
+    return 'O orçamento será tratado pelo vendedor responsável. Como posso te chamar?';
+  }
+  if (!conversation?.city) {
+    return `Obrigado, ${conversation.name.split(/\s+/)[0]}! Em qual cidade e UF será o atendimento?`;
+  }
+  if (!conversation?.uf) {
+    return `${conversation.city} fica em qual UF?`;
+  }
   if (!conversation?.product) {
     return 'Com certeza! O orçamento será tratado pelo vendedor responsável. Qual produto ou tipo de material você procura?';
   }
-  if (!conversation?.city) {
-    return 'Com certeza! O vendedor responsável cuidará do orçamento. Em qual cidade e UF será o atendimento?';
-  }
   return `Perfeito, já registrei ${productLabel(conversation.product)} para ${conversation.city}. Para deixar sua ficha bem direcionada, qual é a aplicação, medida ou quantidade aproximada?`;
+}
+
+function rememberQualificationQuestion(conversation) {
+  conversation.awaitingField = nextRequiredQualification(conversation);
+  conversations.set(conversation.phone, conversation);
+}
+
+function requiredQualificationReply(conversation) {
+  return conversation.commercialHandoffRequested
+    ? commercialQualificationReply(conversation)
+    : conversation.purchaseIntent
+      ? purchaseInterestReply(conversation)
+      : qualificationReply(conversation);
 }
 
 function enforceCommercialBoundaries(reply, conversation) {
@@ -875,7 +936,7 @@ async function handleWebhook(req, res) {
     const requestedTarget = await requestedTransferTarget(text);
     conversation.transferTarget = requestedTarget;
   }
-  if (explicitHandoff || ((conversation.purchaseIntent || conversation.commercialHandoffRequested) && conversation.city && conversation.product && hasQualificationDetail(conversation))) {
+  if (explicitHandoff || ((conversation.purchaseIntent || conversation.commercialHandoffRequested) && !nextRequiredQualification(conversation))) {
     conversation.pendingHandoff = true;
   }
   conversations.set(phone, conversation);
@@ -906,6 +967,7 @@ async function handleWebhook(req, res) {
 
   if (purchaseRequest && !quoteRequest && !conversation.pendingHandoff) {
     const reply = purchaseInterestReply(conversation);
+    rememberQualificationQuestion(conversation);
     await sendCustomerReply(phone, reply);
     console.log(JSON.stringify({ event: 'purchase_interest', phone, id }));
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -917,8 +979,20 @@ async function handleWebhook(req, res) {
     const reply = conversation.commercialHandoffRequested
       ? commercialQualificationReply(conversation)
       : qualificationReply(conversation);
+    rememberQualificationQuestion(conversation);
     await sendCustomerReply(phone, reply);
     console.log(JSON.stringify({ event: 'commercial_qualification', phone, id }));
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+
+  const missing = missingQuestions(conversation);
+  if (missing.length && conversation.pendingHandoff) {
+    const reply = requiredQualificationReply(conversation);
+    rememberQualificationQuestion(conversation);
+    await sendCustomerReply(phone, reply);
+    console.log(JSON.stringify({ event: 'asked_missing_before_handoff', phone, id, missing }));
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true }));
     return;
@@ -951,16 +1025,6 @@ async function handleWebhook(req, res) {
       res.end(JSON.stringify({ ok: true, handoff: false, error: 'handoff_error' }));
       return;
     }
-  }
-
-  const missing = missingQuestions(conversation);
-  if (missing.length && explicitHandoff) {
-    const reply = 'Perfeito, eu faço esse encaminhamento. Em qual cidade e UF será o atendimento?';
-    await sendCustomerReply(phone, reply);
-    console.log(JSON.stringify({ event: 'asked_missing_before_handoff', phone, id, missing }));
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok: true }));
-    return;
   }
 
   const reply = await askGroq(text, phone);
