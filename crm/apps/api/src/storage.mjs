@@ -357,6 +357,21 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
     ];
   }
 
+  function memoryAttendanceScope(viewer = {}) {
+    if (!viewer.userId) return { mode: "all", label: "Todos os atendimentos da operacao", userIds: null, users: [] };
+    if (["admin", "supervisor"].includes(viewer.role)) {
+      return { mode: "all", label: "Todos os atendimentos da operacao", userIds: null, users: db.users.map((user) => ({ id: user.id, name: user.name })) };
+    }
+    const profile = db.sellers.find((item) => item.user_id === viewer.userId);
+    if (profile?.sales_function === "vendedor_externo") {
+      const routeKeys = new Set((profile.routes || []).filter((route) => route.active !== false).map((route) => `${route.channel || "varejo"}:${normalizeText(route.region || route.route_value || route.routeValue)}`));
+      const teamIds = db.sellers.filter((seller) => seller.active !== false && seller.sales_function !== "vendedor_externo" && (seller.routes || []).some((route) => route.active !== false && routeKeys.has(`${route.channel || "varejo"}:${normalizeText(route.region || route.route_value || route.routeValue)}`))).map((seller) => seller.user_id).filter(Boolean);
+      const userIds = [...new Set([viewer.userId, ...teamIds])];
+      return { mode: "route_team", label: "Seus atendimentos e os vendedores sob sua responsabilidade", userIds, users: db.users.filter((user) => userIds.includes(user.id)).map((user) => ({ id: user.id, name: user.name })) };
+    }
+    return { mode: "self", label: "Somente seus atendimentos", userIds: [viewer.userId], users: db.users.filter((user) => user.id === viewer.userId).map((user) => ({ id: user.id, name: user.name })) };
+  }
+
   return {
     mode: "mvp-memory",
     ready: async () => {},
@@ -794,9 +809,10 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
       command.updated_at = new Date().toISOString();
       return { command };
     },
-    kpis: async (pipelineId) => {
+    kpis: async (pipelineId, viewer = {}) => {
       const funnel = pipelineId ? memoryFunnels().find((item) => item.id === pipelineId || item.name.toLowerCase() === String(pipelineId).toLowerCase()) : null;
-      const activeCases = db.cases.filter((item) => !item.deleted_at);
+      const scope = memoryAttendanceScope(viewer);
+      const activeCases = db.cases.filter((item) => !item.deleted_at && (!scope.userIds || scope.userIds.includes(item.owner?.id)));
       const cases = funnel ? activeCases.filter((item) => String(item.fields.pipeline || "").toLowerCase() === funnel.name.toLowerCase()) : activeCases;
       const caseIds = new Set(cases.map((item) => item.id));
       const handoffs = db.handoffs.filter((item) => caseIds.has(item.case_id));
@@ -816,7 +832,8 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
         handoffs: { total: handoffs.length, claimed: handoffs.filter((item) => item.state === "claimed").length },
         tasks: { open: tasks.filter((item) => item.status === "open").length, overdue: 0 },
         byStatus,
-        byPipeline: funnel ? [{ pipeline: funnel.name, count: cases.length }] : []
+        byPipeline: funnel ? [{ pipeline: funnel.name, count: cases.length }] : [],
+        scope: { mode: scope.mode, label: scope.label, users: scope.users }
       };
     },
     exportCasesCsv: async () => {
@@ -948,6 +965,64 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
     `, [ctx.org.id, userId]);
     if (!row) return { error: "user_not_found" };
     return { profile: row };
+  }
+  async function attendanceScope(ctx, viewer = {}) {
+    const allLabel = "Todos os atendimentos da operacao";
+    if (!viewer.userId || ["admin", "supervisor"].includes(viewer.role)) {
+      const users = await many(`
+        select u.id, u.display_name name
+        from users u
+        where u.organization_id=$1 and u.status='active'
+        order by u.display_name
+      `, [ctx.org.id]);
+      return { mode: "all", label: allLabel, userIds: null, users };
+    }
+    const profile = await one(`
+      select id, sales_function
+      from seller_profiles
+      where organization_id=$1 and user_id=$2 and active=true
+      limit 1
+    `, [ctx.org.id, viewer.userId]);
+    if (profile?.sales_function === "vendedor_externo") {
+      const users = await many(`
+        select distinct u.id, u.display_name name
+        from users u
+        left join seller_profiles member on member.user_id=u.id and member.organization_id=u.organization_id and member.active=true
+        where u.organization_id=$1
+          and u.status='active'
+          and (
+            u.id=$2
+            or (
+              member.sales_function <> 'vendedor_externo'
+              and exists (
+                select 1
+                from seller_routes leader_route
+                join seller_routes member_route
+                  on member_route.profile_id=member.id
+                 and member_route.active=true
+                 and member_route.channel=leader_route.channel
+                 and (
+                   lower(member_route.route_value)=lower(leader_route.route_value)
+                   or (
+                     nullif(btrim(member_route.region),'') is not null
+                     and lower(member_route.region)=lower(leader_route.region)
+                   )
+                 )
+                where leader_route.profile_id=$3 and leader_route.active=true
+              )
+            )
+          )
+        order by name
+      `, [ctx.org.id, viewer.userId, profile.id]);
+      return {
+        mode: "route_team",
+        label: "Seus atendimentos e os vendedores sob sua responsabilidade",
+        userIds: users.map((user) => user.id),
+        users
+      };
+    }
+    const users = await many(`select id, display_name name from users where organization_id=$1 and id=$2 and status='active'`, [ctx.org.id, viewer.userId]);
+    return { mode: "self", label: "Somente seus atendimentos", userIds: [viewer.userId], users };
   }
   async function findRoutedSeller(ctx, input) {
     const channel = normalizeText(input.pipeline) === "ATACADO" ? "atacado" : "varejo";
@@ -2362,16 +2437,16 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       }
       return { command };
     },
-    kpis: async (pipelineId) => {
+    kpis: async (pipelineId, viewer = {}) => {
       const ctx = await ready();
+      const scope = await attendanceScope(ctx, viewer);
       const funnel = pipelineId
         ? await one("select id, name from pipelines where organization_id=$1 and (id::text=$2 or lower(name)=lower($2)) limit 1", [ctx.org.id, pipelineId])
         : null;
       if (pipelineId && !funnel) {
-        return { funnel: null, totals: { cases: 0, closed: 0, won: 0, lost: 0, sale_value: 0 }, handoffs: { total: 0, claimed: 0 }, tasks: { open: 0, overdue: 0 }, byStatus: [], byPipeline: [] };
+        return { funnel: null, totals: { cases: 0, closed: 0, won: 0, lost: 0, sale_value: 0 }, handoffs: { total: 0, claimed: 0 }, tasks: { open: 0, overdue: 0 }, byStatus: [], byPipeline: [], scope: { mode: scope.mode, label: scope.label, users: scope.users } };
       }
-      const caseFilter = funnel ? " and pipeline_id=$2" : "";
-      const caseParams = funnel ? [ctx.org.id, funnel.id] : [ctx.org.id];
+      const caseParams = [ctx.org.id, funnel?.id || null, scope.userIds];
       const totals = await one(`
         select
           count(*)::int cases,
@@ -2379,27 +2454,43 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
           count(*) filter (where won_at is not null)::int won,
           count(*) filter (where lost_at is not null)::int lost,
           coalesce(sum(sale_value),0)::numeric sale_value
-        from cases where organization_id=$1 and deleted_at is null${caseFilter}
+        from cases c
+        where c.organization_id=$1 and c.deleted_at is null
+          and ($2::uuid is null or c.pipeline_id=$2)
+          and ($3::uuid[] is null or c.owner_user_id=any($3::uuid[]))
       `, caseParams);
-      const byStatus = await many(`select status, count(*)::int count from cases where organization_id=$1 and deleted_at is null${caseFilter} group by status order by status`, caseParams);
+      const byStatus = await many(`
+        select c.status, count(*)::int count
+        from cases c
+        where c.organization_id=$1 and c.deleted_at is null
+          and ($2::uuid is null or c.pipeline_id=$2)
+          and ($3::uuid[] is null or c.owner_user_id=any($3::uuid[]))
+        group by c.status order by c.status
+      `, caseParams);
       const byPipeline = funnel ? [{ pipeline: funnel.name, count: totals.cases }] : await many(`
         select coalesce(p.name,'Sem funil') pipeline, count(c.id)::int count
         from cases c left join pipelines p on p.id=c.pipeline_id
-        where c.organization_id=$1 and c.deleted_at is null group by p.name order by count desc
-      `, [ctx.org.id]);
-      const handoffFilter = funnel ? " and c.pipeline_id=$2" : "";
-      const handoffParams = funnel ? [ctx.org.id, funnel.id] : [ctx.org.id];
+        where c.organization_id=$1 and c.deleted_at is null
+          and ($2::uuid is null or c.pipeline_id=$2)
+          and ($3::uuid[] is null or c.owner_user_id=any($3::uuid[]))
+        group by p.name order by count desc
+      `, caseParams);
       const handoffs = await one(`
         select count(*)::int total, count(*) filter (where exists (select 1 from handoff_events he where he.handoff_id=h.id and he.type='claimed'))::int claimed
-        from handoffs h join cases c on c.id=h.case_id where h.organization_id=$1 and c.deleted_at is null${handoffFilter}
-      `, handoffParams);
+        from handoffs h join cases c on c.id=h.case_id
+        where h.organization_id=$1 and c.deleted_at is null
+          and ($2::uuid is null or c.pipeline_id=$2)
+          and ($3::uuid[] is null or c.owner_user_id=any($3::uuid[]))
+      `, caseParams);
       const tasks = await one(`
         select count(*) filter (where t.status='open')::int open,
                count(*) filter (where t.status='open' and t.due_at < now())::int overdue
         from tasks t join cases c on c.id=t.case_id
-        where t.organization_id=$1 and c.deleted_at is null${funnel ? " and c.pipeline_id=$2" : ""}
+        where t.organization_id=$1 and c.deleted_at is null
+          and ($2::uuid is null or c.pipeline_id=$2)
+          and ($3::uuid[] is null or c.owner_user_id=any($3::uuid[]))
       `, caseParams);
-      return { funnel: funnel ? { id: funnel.id, name: funnel.name } : null, totals, handoffs, tasks, byStatus, byPipeline };
+      return { funnel: funnel ? { id: funnel.id, name: funnel.name } : null, totals, handoffs, tasks, byStatus, byPipeline, scope: { mode: scope.mode, label: scope.label, users: scope.users } };
     },
     exportCasesCsv: async () => {
       await ready();

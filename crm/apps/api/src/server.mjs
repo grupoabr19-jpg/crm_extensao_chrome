@@ -541,8 +541,9 @@ async function handler(req, res) {
     }
 
     if (req.method === "GET" && url.pathname === "/v1/reports/kpis") {
+      const user = userFromRequest(req);
       await storage.ready();
-      return send(res, 200, await storage.kpis(url.searchParams.get("pipeline_id")));
+      return send(res, 200, await storage.kpis(url.searchParams.get("pipeline_id"), { userId: user.sub, role: user.role, name: user.name }));
     }
 
     if (req.method === "GET" && url.pathname === "/v1/reports/sales") {

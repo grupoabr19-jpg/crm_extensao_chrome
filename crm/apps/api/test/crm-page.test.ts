@@ -50,13 +50,18 @@ describe("CRM web page", () => {
     expect(html).toContain('won_order_number_required');
     expect(html).toContain('Venda perdida enviada ao funil de reativação.');
   });
-  it("keeps team routing admin-only and sales metrics in collapsed groups", () => {
+  it("keeps team routing admin-only and separates attendance from the sales funnel", () => {
     expect(html).toContain("$('navAdmin').hidden = session.user.role !== 'admin'");
     expect(html).toContain("state.user?.role !== 'admin'");
+    expect(html).toContain('id="navService"');
+    expect(html).toContain('id="service"');
+    expect(html).toContain('id="serviceScope"');
+    expect(html).toContain("$('service').classList.toggle('active', name === 'service')");
+    expect(html).toContain("if (name === 'service') loadKpis()");
     expect(html).toContain('id="sellerSalesGroup"');
     expect(html).toContain('id="teamSalesGroup"');
     expect(html).not.toContain('id="salesTotal"');
     expect(html).not.toContain('id="salesRows"');
-    expect(html).toContain("$('kpis').hidden = name !== 'board'");
+    expect(html).not.toContain("$('kpis').hidden = name !== 'board'");
   });
 });
