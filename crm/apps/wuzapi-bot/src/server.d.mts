@@ -12,6 +12,11 @@ export type ConversationState = {
 };
 
 export function appendCrmCaseLink(message: string, baseUrl: string, caseId: string): string;
+export function calculateReplyDelayMs(
+  text: string,
+  randomValue?: number,
+  options?: { minimum?: number; maximum?: number; perCharacter?: number; jitter?: number }
+): number;
 export function commercialQualificationReply(conversation: ConversationState): string;
 export function conversationalPunctuation(value: string): string;
 export function enforceCommercialBoundaries(reply: string, conversation: ConversationState): string;
