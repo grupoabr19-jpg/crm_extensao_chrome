@@ -37,8 +37,9 @@
     .editField input,.editField select,.editField textarea{margin:0 0 12px}
     .editField textarea{min-height:76px}
     .dialogFooter{flex:none;display:flex;justify-content:flex-end;gap:9px;padding:13px 24px;border-top:1px solid var(--line);background:#fff}
-    .cardDelete{position:absolute;right:9px;top:9px;width:30px;height:30px;min-height:0;padding:0;display:grid;place-items:center;border:1px solid transparent;border-radius:8px;background:transparent;color:#98a4b4;z-index:2}.cardDelete:hover{background:#fff0ee;border-color:#f2d1cd;color:#b8463d;box-shadow:none}.cardDelete svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.card> b{padding-right:30px}.dataView{flex:1;overflow:auto;padding:24px 32px 40px;display:block}.dataView.view.active{display:block}.dataSummary{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}.dataSummary h2{margin:0;font-size:19px}.dataSummary p{margin:5px 0 0;color:var(--muted);font-size:12px}.summaryValue{font-size:24px;font-weight:750;color:var(--green)}.dataTableBox{background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 16px;box-shadow:0 2px 8px #1b2b4308}.emptyTable{padding:28px;text-align:center;color:var(--muted);font-size:12px}
-    @media(max-width:640px){.drawer{width:calc(100vw - 20px);height:calc(100vh - 20px);border-radius:12px}.drawerHeader{padding-left:18px}.drawerBody{padding:16px 18px}.editGrid{grid-template-columns:1fr}.editField.full{grid-column:auto}.dialogFooter{padding:12px 18px}}
+    .cardDelete{position:absolute;right:9px;top:9px;width:30px;height:30px;min-height:0;padding:0;display:grid;place-items:center;border:1px solid transparent;border-radius:8px;background:transparent;color:#98a4b4;z-index:2}.cardDelete:hover{background:#fff0ee;border-color:#f2d1cd;color:#b8463d;box-shadow:none}.cardDelete svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.card> b{padding-right:30px}.dataView{flex:1;overflow:auto;padding:24px 32px 40px;display:block}.dataView.view.active{display:block}.dataSummary{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}.dataSummary h2{margin:0;font-size:19px}.dataSummary p{margin:5px 0 0;color:var(--muted);font-size:12px}.summaryValue{font-size:24px;font-weight:750;color:var(--green)}.dataTableBox{background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 16px;box-shadow:0 2px 8px #1b2b4308}.emptyTable{padding:28px;text-align:center;color:var(--muted);font-size:12px}.customerFilters{display:grid;grid-template-columns:minmax(240px,2fr) minmax(170px,1fr) minmax(190px,1fr) auto auto;gap:10px;align-items:end;padding:14px 4px 16px;border-bottom:1px solid var(--line)}.customerFilterField{min-width:0}.customerFilterField label{display:block;margin:0 0 5px;color:#66758c;font-size:10px;font-weight:700}.customerFilterField input,.customerFilterField select{width:100%;height:39px;border:1px solid #dfe4eb;border-radius:8px;padding:0 10px;background:#fff;color:var(--ink);font-size:11px}.customerFilterField input:focus,.customerFilterField select:focus{outline:none;border-color:#eca454;box-shadow:0 0 0 3px #ee8a221c}.customerPager{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:13px 4px 4px;color:var(--muted);font-size:11px}.customerPagerControls{display:flex;align-items:center;gap:8px}.customerPager select{height:34px;border:1px solid #dfe4eb;border-radius:8px;background:#fff;padding:0 8px;color:var(--ink);font-size:11px}.pageArrow{width:34px;height:34px;border:1px solid #dfe4eb;border-radius:8px;background:#fff;color:#41516a;font-size:17px;line-height:1}.pageArrow:disabled{opacity:.4;cursor:not-allowed}.customerCountLabel{font-weight:650;color:#52627a}
+    @media(max-width:900px){.customerFilters{grid-template-columns:1fr 1fr}.customerFilters .customerFilterField:first-child{grid-column:1/-1}.customerFilters .button{width:100%}}
+    @media(max-width:640px){.drawer{width:calc(100vw - 20px);height:calc(100vh - 20px);border-radius:12px}.drawerHeader{padding-left:18px}.drawerBody{padding:16px 18px}.editGrid{grid-template-columns:1fr}.editField.full{grid-column:auto}.dialogFooter{padding:12px 18px}.customerFilters{grid-template-columns:1fr}.customerFilters .customerFilterField:first-child{grid-column:auto}.customerPager{align-items:flex-start;flex-direction:column}.customerPagerControls{width:100%;justify-content:space-between}}
   </style>
 </head>
 <body>
@@ -87,7 +88,16 @@
       <section class="board view active" id="board" aria-label="Quadro de oportunidades"></section>
       <section class="dataView view" id="customers" aria-label="Clientes">
         <div class="dataSummary"><div><h2>Clientes</h2><p>Cadastro consolidado de clientes e histórico de fichas.</p></div><div class="summaryValue" id="customersTotal">0</div></div>
-        <div class="dataTableBox"><div class="tableScroll"><table><thead><tr><th>Código</th><th>Cliente</th><th>Telefone</th><th>Cidade/UF</th><th>Fichas</th><th>Última compra</th></tr></thead><tbody id="customerRows"></tbody></table></div></div>
+        <div class="dataTableBox">
+          <form class="customerFilters" id="customerFilterForm">
+            <div class="customerFilterField"><label for="customerQuery">Buscar cliente</label><input id="customerQuery" type="search" placeholder="Nome, código, telefone ou cidade"></div>
+            <div class="customerFilterField"><label for="customerSegment">Segmentação</label><select id="customerSegment"><option value="">Todos os segmentos</option></select></div>
+            <div class="customerFilterField"><label for="customerSeller">Vendedor que atendeu</label><select id="customerSeller"><option value="">Todos os vendedores</option></select></div>
+            <button class="button" type="submit">Buscar</button><button class="button secondary" id="clearCustomerFilters" type="button">Limpar</button>
+          </form>
+          <div class="tableScroll"><table><thead><tr><th>Código</th><th>Cliente</th><th>Telefone</th><th>Cidade/UF</th><th>Segmentação</th><th>Vendedor</th><th>Fichas</th><th>Última compra</th></tr></thead><tbody id="customerRows"><tr><td colspan="8" class="emptyTable">Use a busca ou os filtros para localizar clientes.</td></tr></tbody></table></div>
+          <footer class="customerPager" id="customerPager" hidden><span class="customerCountLabel" id="customerPageInfo"></span><div class="customerPagerControls"><label for="customerPageSize">Mostrar</label><select id="customerPageSize"><option value="25">25</option><option value="50">50</option><option value="100">100</option></select><span>por página</span><button class="pageArrow" id="customerPrev" type="button" aria-label="Página anterior">‹</button><button class="pageArrow" id="customerNext" type="button" aria-label="Próxima página">›</button></div></footer>
+        </div>
       </section>
       <section class="dataView view" id="sales" aria-label="Vendas ganhas">
         <div class="dataSummary"><div><h2>Vendas ganhas</h2><p>Somatório das oportunidades concluídas com valor e pedido registrados.</p></div><div><div class="muted">Valor total</div><div class="summaryValue" id="salesTotal">R$ 0,00</div></div></div>
@@ -171,7 +181,7 @@
       history.replaceState(null, '', location.pathname + location.hash);
     }
     const api = location.origin;
-    const state = { funnels: [], board: null, active: null, dragged: null, query: "", selected: null, sellers: [], customers: [], sales: [], profile: null, authToken: "", user: null, authRevision: 0, searchRevision: 0, customerImportToken: "" };
+    const state = { funnels: [], board: null, active: null, dragged: null, query: "", selected: null, sellers: [], customers: [], sales: [], profile: null, authToken: "", user: null, authRevision: 0, searchRevision: 0, customerRevision: 0, customerPage: 1, customerPageSize: 25, customerImportToken: "" };
     const $ = (id) => document.getElementById(id);
     const say = (m) => { const el = $('status'); el.textContent = m; el.dataset.state = String(m).startsWith('Erro:') ? 'error' : 'ok'; };
     async function json(path, opts) {
@@ -201,12 +211,13 @@
       state.selected = null;
       state.sellers = [];
       state.customers = [];
+      state.customerPage = 1;
       state.sales = [];
       state.profile = null;
       $('board').innerHTML = '';
       $('kpis').innerHTML = '';
       $('sellerRows').innerHTML = '';
-      $('customerRows').innerHTML = '';
+      $('customerRows').innerHTML = '<tr><td colspan="8" class="emptyTable">Use a busca ou os filtros para localizar clientes.</td></tr>';
       $('salesRows').innerHTML = '';
       $('drawerBody').innerHTML = '';
       $('search').value = '';
@@ -360,7 +371,7 @@
       try {
         await json(`/v1/cases/${encodeURIComponent(caseId)}`, { method: 'DELETE' });
         if (state.selected?.id === caseId) closeDrawer();
-        await Promise.all([loadBoard(), loadKpis(), loadReactivationAlerts()]);
+        await Promise.all([loadBoard(), loadKpis(), loadReactivationAlerts(), loadCustomers({ resetPage: true })]);
         say('Card apagado.');
       } catch (err) {
         say('Erro ao apagar o card: ' + err.message);
@@ -701,7 +712,7 @@
         });
         state.customerImportToken = '';
         $('importStatus').textContent = `Importação concluída: ${result.totalCustomers.toLocaleString('pt-BR')} registros; ${result.imported.toLocaleString('pt-BR')} novos; ${result.updated.toLocaleString('pt-BR')} atualizados; ${result.historyLinked.toLocaleString('pt-BR')} históricos vinculados; ${result.historyAmbiguous.toLocaleString('pt-BR')} ambíguos e ${result.historyUnmatched.toLocaleString('pt-BR')} sem vínculo.`;
-        await Promise.all([loadBoard(), loadKpis(), loadReactivationAlerts()]);
+        await Promise.all([loadBoard(), loadKpis(), loadReactivationAlerts(), loadCustomers({ resetPage: true })]);
       } catch (error) {
         $('importStatus').textContent = `Importação não concluída: ${error.message}`;
       } finally {
@@ -860,11 +871,46 @@
     function formatMoney(value) {
       return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0));
     }
-    async function loadCustomers() {
-      const data = await json('/v1/customers/table');
+    function populateCustomerFilter(id, values, emptyLabel) {
+      const select = $(id);
+      const selected = select.value;
+      select.innerHTML = `<option value="">${escapeHtml(emptyLabel)}</option>${(values || []).map(value => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join('')}`;
+      if ([...select.options].some(option => option.value === selected)) select.value = selected;
+    }
+    async function loadCustomers({ resetPage = false } = {}) {
+      if (resetPage) state.customerPage = 1;
+      const revision = ++state.customerRevision;
+      const query = $('customerQuery').value.trim();
+      const segment = $('customerSegment').value;
+      const seller = $('customerSeller').value;
+      const params = new URLSearchParams({
+        q: query,
+        segment,
+        seller,
+        page: String(state.customerPage),
+        page_size: String(state.customerPageSize)
+      });
+      const data = await json(`/v1/customers/table?${params}`);
+      if (revision !== state.customerRevision) return;
       state.customers = data.items || [];
-      $('customersTotal').textContent = String(data.total || 0);
-      $('customerRows').innerHTML = state.customers.map(customer => `<tr><td>${escapeHtml(customer.customer_code || '-')}</td><td><b>${escapeHtml(customer.name || 'Cliente sem nome')}</b></td><td>${escapeHtml(customer.phone || '-')}</td><td>${escapeHtml(customer.city || '-')}${customer.uf ? '/' + escapeHtml(customer.uf) : ''}</td><td>${escapeHtml(customer.case_count || 0)}</td><td>${escapeHtml(customer.last_purchase_at ? new Date(customer.last_purchase_at).toLocaleDateString('pt-BR') : '-')}</td></tr>`).join('') || '<tr><td colspan="6" class="emptyTable">Nenhum cliente cadastrado.</td></tr>';
+      populateCustomerFilter('customerSegment', data.segments, 'Todos os segmentos');
+      populateCustomerFilter('customerSeller', data.sellers, 'Todos os vendedores');
+      const filteredTotal = Number(data.filteredTotal || 0);
+      const total = Number(data.total || 0);
+      $('customersTotal').textContent = data.hasFilters ? `${filteredTotal} de ${total}` : String(total);
+      if (!data.hasFilters) {
+        $('customerRows').innerHTML = '<tr><td colspan="8" class="emptyTable">Use a busca ou os filtros para localizar clientes.</td></tr>';
+        $('customerPager').hidden = true;
+        return;
+      }
+      $('customerRows').innerHTML = state.customers.map(customer => `<tr><td>${escapeHtml(customer.customer_code || '-')}</td><td><b>${escapeHtml(customer.name || 'Cliente sem nome')}</b></td><td>${escapeHtml(customer.phone || '-')}</td><td>${escapeHtml(customer.city || '-')}${customer.uf ? '/' + escapeHtml(customer.uf) : ''}</td><td>${escapeHtml(customer.segment || '-')}</td><td>${escapeHtml(customer.seller || '-')}</td><td>${escapeHtml(customer.case_count || 0)}</td><td>${escapeHtml(customer.last_purchase_at ? new Date(customer.last_purchase_at).toLocaleDateString('pt-BR') : '-')}</td></tr>`).join('') || '<tr><td colspan="8" class="emptyTable">Nenhum cliente corresponde aos filtros escolhidos.</td></tr>';
+      $('customerPager').hidden = filteredTotal === 0;
+      const start = filteredTotal ? ((state.customerPage - 1) * state.customerPageSize) + 1 : 0;
+      const end = Math.min(state.customerPage * state.customerPageSize, filteredTotal);
+      const totalPages = Math.max(1, Math.ceil(filteredTotal / state.customerPageSize));
+      $('customerPageInfo').textContent = `${start}–${end} de ${filteredTotal} clientes · página ${state.customerPage} de ${totalPages}`;
+      $('customerPrev').disabled = state.customerPage <= 1;
+      $('customerNext').disabled = state.customerPage >= totalPages;
     }
     async function loadSales() {
       const data = await json('/v1/reports/sales');
@@ -890,6 +936,30 @@
     $('navSales').onclick = () => showView('sales');
     $('navAdmin').onclick = () => showView('admin');
     $('navProfile').onclick = () => showView('profile');
+    $('customerFilterForm').onsubmit = event => {
+      event.preventDefault();
+      loadCustomers({ resetPage: true }).catch(err => say('Erro ao filtrar clientes: ' + err.message));
+    };
+    $('clearCustomerFilters').onclick = () => {
+      $('customerQuery').value = '';
+      $('customerSegment').value = '';
+      $('customerSeller').value = '';
+      state.customerPage = 1;
+      loadCustomers().catch(err => say('Erro ao limpar filtros: ' + err.message));
+    };
+    $('customerPageSize').onchange = () => {
+      state.customerPageSize = Number($('customerPageSize').value) || 25;
+      loadCustomers({ resetPage: true }).catch(err => say('Erro ao atualizar a lista: ' + err.message));
+    };
+    $('customerPrev').onclick = () => {
+      if (state.customerPage <= 1) return;
+      state.customerPage -= 1;
+      loadCustomers().catch(err => say('Erro ao carregar a página anterior: ' + err.message));
+    };
+    $('customerNext').onclick = () => {
+      state.customerPage += 1;
+      loadCustomers().catch(err => say('Erro ao carregar a próxima página: ' + err.message));
+    };
     $('exportBtn').onclick = async () => {
       try {
         const exportToken = state.authToken;

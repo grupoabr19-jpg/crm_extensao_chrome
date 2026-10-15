@@ -552,18 +552,42 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
       found.deleted_at = new Date().toISOString();
       return { ok: true, id: caseId };
     },
-    listCustomers: async () => {
+    listCustomers: async (options = {}) => {
       const activeCases = db.cases.filter((item) => !item.deleted_at);
-      const items = Array.from(new Map(activeCases.map((item) => [item.contact.phone, {
+      const all = Array.from(new Map(activeCases.map((item) => [item.contact.phone, {
         id: item.contact.id || item.contact.phone,
         customer_code: item.contact.customer_code || null,
         name: item.contact.name,
         phone: item.contact.phone,
         city: item.fields.city,
         uf: item.fields.uf,
+        segment: item.fields.segment || null,
+        seller: item.owner?.name || null,
         case_count: activeCases.filter((candidate) => candidate.contact.phone === item.contact.phone).length
       }])).values());
-      return { items, total: items.length };
+      const query = String(options.query || "").trim().toLocaleLowerCase("pt-BR");
+      const segment = String(options.segment || "").trim().toLocaleLowerCase("pt-BR");
+      const seller = String(options.seller || "").trim().toLocaleLowerCase("pt-BR");
+      const pageSize = [25, 50, 100].includes(Number(options.pageSize)) ? Number(options.pageSize) : 25;
+      const page = Math.max(1, Number.parseInt(options.page, 10) || 1);
+      const hasFilters = Boolean(query || segment || seller);
+      const filtered = hasFilters ? all.filter((item) => {
+        const haystack = `${item.customer_code || ""} ${item.name || ""} ${item.phone || ""} ${item.city || ""} ${item.uf || ""}`.toLocaleLowerCase("pt-BR");
+        return (!query || haystack.includes(query))
+          && (!segment || String(item.segment || "").toLocaleLowerCase("pt-BR") === segment)
+          && (!seller || String(item.seller || "").toLocaleLowerCase("pt-BR") === seller);
+      }) : [];
+      const offset = (page - 1) * pageSize;
+      return {
+        items: filtered.slice(offset, offset + pageSize),
+        total: all.length,
+        filteredTotal: filtered.length,
+        page,
+        pageSize,
+        hasFilters,
+        segments: [...new Set(all.map((item) => item.segment).filter(Boolean))].sort(),
+        sellers: [...new Set(all.map((item) => item.seller).filter(Boolean))].sort()
+      };
     },
     listSales: async () => {
       const items = db.cases.filter((item) => !item.deleted_at && item.won_at);
@@ -1674,29 +1698,91 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       const deleted = await one("update cases set deleted_at=now(),updated_at=now() where organization_id=$1 and id=$2 and deleted_at is null returning id", [ctx.org.id, caseId]);
       return deleted ? { ok: true, id: deleted.id } : { error: "case_not_found" };
     },
-    listCustomers: async () => {
+    listCustomers: async (options = {}) => {
       const ctx = await ready();
-      const items = await many(`
-        select co.id,co.customer_code,co.display_name name,co.customer_profile profile,
-          ci.e164 phone,count(distinct c.id)::int case_count,max(c.updated_at)::text last_case_at,
-          max(coalesce(c.city,co.customer_profile->>'city')) city,
-          max(coalesce(c.uf,co.customer_profile->>'uf')) uf,
-          coalesce(ps.order_count,0)::int order_count,coalesce(ps.total_sales,0)::numeric imported_total_sales,
-          ps.last_purchase_at::text last_purchase_at
-        from contacts co
-        left join lateral (
-          select e164 from contact_identifiers
-          where organization_id=co.organization_id and contact_id=co.id and kind='phone'
-          order by (source='mvp_panel') desc,reliable desc,id limit 1
-        ) ci on true
-        left join cases c on c.contact_id=co.id and c.organization_id=co.organization_id and c.deleted_at is null
-        left join customer_purchase_summaries ps on ps.organization_id=co.organization_id and ps.contact_id=co.id
-        where co.organization_id=$1
-        group by co.id,ci.e164,ps.order_count,ps.total_sales,ps.last_purchase_at
-        order by co.display_name nulls last,co.customer_code
-        limit 1000
+      const query = String(options.query || "").trim().slice(0, 120);
+      const segment = String(options.segment || "").trim().slice(0, 120);
+      const seller = String(options.seller || "").trim().slice(0, 120);
+      const pageSize = [25, 50, 100].includes(Number(options.pageSize)) ? Number(options.pageSize) : 25;
+      const page = Math.max(1, Number.parseInt(options.page, 10) || 1);
+      const offset = (page - 1) * pageSize;
+      const hasFilters = Boolean(query || segment || seller);
+      const totalRow = await one("select count(*)::int total from contacts where organization_id=$1", [ctx.org.id]);
+      const segments = await many(`
+        select value from (
+          select s.label value from segments s where s.organization_id=$1
+          union
+          select nullif(btrim(co.customer_profile->>'segment'),'') value from contacts co where co.organization_id=$1
+        ) options where value is not null order by value
       `, [ctx.org.id]);
-      return { items, total: items.length };
+      const sellers = await many(`
+        select value from (
+          select u.display_name value from users u where u.organization_id=$1 and u.status='active' and u.role in ('seller','supervisor')
+          union
+          select nullif(btrim(co.customer_profile->>'seller'),'') value from contacts co where co.organization_id=$1
+        ) options where value is not null order by value
+      `, [ctx.org.id]);
+      if (!hasFilters) {
+        return {
+          items: [],
+          total: totalRow.total,
+          filteredTotal: 0,
+          page,
+          pageSize,
+          hasFilters: false,
+          segments: segments.map((item) => item.value),
+          sellers: sellers.map((item) => item.value)
+        };
+      }
+      const items = await many(`
+        with customer_rows as (
+          select co.id,co.customer_code,co.display_name name,co.customer_profile profile,
+            ci.e164 phone,coalesce(cc.case_count,0)::int case_count,latest.updated_at::text last_case_at,
+            coalesce(latest.city,co.customer_profile->>'city') city,
+            coalesce(latest.uf,co.customer_profile->>'uf',co.customer_profile->>'state') uf,
+            coalesce(latest.segment,co.customer_profile->>'segment') segment,
+            coalesce(latest.seller,co.customer_profile->>'seller') seller,
+            coalesce(ps.order_count,0)::int order_count,coalesce(ps.total_sales,0)::numeric imported_total_sales,
+            ps.last_purchase_at::text last_purchase_at
+          from contacts co
+          left join lateral (
+            select e164 from contact_identifiers
+            where organization_id=co.organization_id and contact_id=co.id and kind='phone'
+            order by (source='mvp_panel') desc,reliable desc,id limit 1
+          ) ci on true
+          left join lateral (
+            select count(*)::int case_count from cases c
+            where c.organization_id=co.organization_id and c.contact_id=co.id and c.deleted_at is null
+          ) cc on true
+          left join lateral (
+            select c.city,c.uf,s.label segment,u.display_name seller,c.updated_at
+            from cases c
+            left join segments s on s.id=c.segment_id
+            left join users u on u.id=c.owner_user_id
+            where c.organization_id=co.organization_id and c.contact_id=co.id and c.deleted_at is null
+            order by c.updated_at desc,c.created_at desc limit 1
+          ) latest on true
+          left join customer_purchase_summaries ps on ps.organization_id=co.organization_id and ps.contact_id=co.id
+          where co.organization_id=$1
+        )
+        select *,count(*) over()::int filtered_total
+        from customer_rows row
+        where ($2='' or concat_ws(' ',row.customer_code,row.name,row.phone,row.city,row.uf) ilike ('%' || $2 || '%'))
+          and ($3='' or lower(coalesce(row.segment,''))=lower($3))
+          and ($4='' or lower(coalesce(row.seller,''))=lower($4))
+        order by row.name nulls last,row.customer_code
+        limit $5 offset $6
+      `, [ctx.org.id, query, segment, seller, pageSize, offset]);
+      return {
+        items,
+        total: totalRow.total,
+        filteredTotal: items[0]?.filtered_total || 0,
+        page,
+        pageSize,
+        hasFilters: true,
+        segments: segments.map((item) => item.value),
+        sellers: sellers.map((item) => item.value)
+      };
     },
     listSales: async () => {
       const ctx = await ready();

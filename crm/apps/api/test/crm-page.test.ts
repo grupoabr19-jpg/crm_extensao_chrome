@@ -33,6 +33,18 @@ describe("CRM web page", () => {
     expect(html).toContain("method: 'DELETE'");
   });
 
+  it("keeps the customer directory hidden until filtered and paginates the results", () => {
+    expect(html).toContain('id="customerFilterForm"');
+    expect(html).toContain('id="customerSegment"');
+    expect(html).toContain('id="customerSeller"');
+    expect(html).toContain('id="customerPageSize"');
+    expect(html).toContain('<option value="25">25</option>');
+    expect(html).toContain('<option value="50">50</option>');
+    expect(html).toContain('<option value="100">100</option>');
+    expect(html).toContain('Use a busca ou os filtros para localizar clientes.');
+    expect(html).toContain("page_size: String(state.customerPageSize)");
+  });
+
   it("requires value and order number in the won-sale workflow", () => {
     expect(html).toContain('id="orderNumber"');
     expect(html).toContain('won_order_number_required');

@@ -508,7 +508,13 @@ async function handler(req, res) {
 
     if (req.method === "GET" && url.pathname === "/v1/customers/table") {
       await storage.ready();
-      return send(res, 200, await storage.listCustomers());
+      return send(res, 200, await storage.listCustomers({
+        query: url.searchParams.get("q"),
+        segment: url.searchParams.get("segment"),
+        seller: url.searchParams.get("seller"),
+        page: url.searchParams.get("page"),
+        pageSize: url.searchParams.get("page_size")
+      }));
     }
 
     if (req.method === "GET" && url.pathname === "/v1/cases") {
