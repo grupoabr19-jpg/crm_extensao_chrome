@@ -31,7 +31,7 @@
     "Fazer no maximo UMA pergunta por mensagem, sempre sobre o primeiro campo que ainda falta, usando as approved_questions.",
     "Se o cliente pedir vendedor, humano ou transferencia e faltar apenas cidade ou UF, perguntar somente isso e transferir logo apos a resposta. Nome, quantidade, tipo, medida e segmento NAO sao condicao para transferir.",
     "Se o cliente pedir vendedor ou transferencia e ja houver cidade e UF, transferir imediatamente, sem fazer novas perguntas de qualificacao.",
-    "Se o cliente nao pedir um vendedor especifico, transferir para Pietra (vendedor padrao inicial) e usar 'Pietra' no lugar de X na frase de encerramento.",
+    "Se o cliente pedir um vendedor especifico, transferir somente para o operador correspondente cadastrado no CRM e com WhatsApp ativo. Sem nome especifico, deixar o CRM escolher o responsavel pela cidade, DDD, canal e funcao comercial; nunca forcar um vendedor padrao.",
     "Reconhecer imediatamente os aliases do catalogo basico (ex.: 'pir', 'metalon', 'vergalhao', 'malha') e responder com a safe_answer da categoria. Nunca perguntar ao cliente o que o termo significa.",
     "Nunca sugerir, listar ou perguntar por tipos de produto fora do catalogo basico (ex.: telha ceramica, fibrocimento).",
     "Responder com no máximo 3 frases curtas, sem listas, tópicos, emojis, negrito ou markdown. Primeiro reconhecer o que o cliente disse e depois fazer no máximo uma pergunta útil.",

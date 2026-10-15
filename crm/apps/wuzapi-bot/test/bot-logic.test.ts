@@ -100,4 +100,22 @@ describe("WuzAPI bot conversation logic", () => {
     expect(bot.requestedPietra("transfere pra pietra")).toBe(true);
     expect(bot.wantsHumanSmart("o vendedor falou comigo ontem")).toBe(false);
   });
+
+  it("resolves any registered operator requested by name", () => {
+    const sellers = [
+      { user_id: "u1", name: "Pietra Leite", whatsapp_e164: "+5535998138542" },
+      { user_id: "u2", name: "Juliano Pereira", whatsapp_e164: "+553599055943" },
+      { user_id: "u3", name: "Julio Melo", whatsapp_e164: "+553597707975" },
+      { user_id: "u4", name: "Marcelo Silva", whatsapp_e164: null }
+    ];
+
+    expect(bot.resolveNamedOperator("transfere para Juliano Pereira", sellers)).toEqual({
+      name: "Juliano Pereira",
+      phone: "553599055943",
+      userId: "u2"
+    });
+    expect(bot.resolveNamedOperator("pode passar para o Julio?", sellers)?.name).toBe("Julio Melo");
+    expect(bot.resolveNamedOperator("quero falar com Marcelo", sellers)).toBeNull();
+    expect(bot.resolveNamedOperator("Juliano atende essa regiao", sellers)).toBeNull();
+  });
 });

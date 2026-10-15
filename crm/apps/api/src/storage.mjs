@@ -977,6 +977,31 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
     }
     const departmentName = String(input.department || "Vendas").slice(0, 80);
     const department = await ensureDepartment(ctx.org.id, departmentName);
+    const registered = await one(`
+      select u.id user_id, u.display_name seller_name, u.role,
+        sp.sales_function, sp.whatsapp_e164
+      from seller_profiles sp
+      join users u on u.id=sp.user_id
+      where sp.organization_id=$1
+        and sp.active=true
+        and u.status='active'
+        and sp.whatsapp_e164=$2
+      limit 1
+    `, [ctx.org.id, requested.e164]);
+    if (registered) {
+      const account = await ensureAccount(ctx.org.id, requested.e164, registered.seller_name, "employee");
+      await ensureUserDepartment(registered.user_id, department.id);
+      await ensureBinding(ctx.org.id, registered.user_id, account.id);
+      return {
+        user: { id: registered.user_id, name: registered.seller_name, role: registered.role || "seller" },
+        account,
+        department,
+        phone: account.e164,
+        name: registered.seller_name,
+        departmentName,
+        reason: "Operador cadastrado selecionado manualmente"
+      };
+    }
     const safePhone = requested.e164.replace(/\D/g, "");
     const displayName = String(input.responsibleName || "Responsavel ABR").slice(0, 120);
     const user = await ensureUser(ctx.org.id, `mvp-${safePhone}@abr.local`, displayName, "seller");

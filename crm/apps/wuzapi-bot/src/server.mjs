@@ -23,9 +23,11 @@ const allowedPhones = new Set(
 const seenMessageIds = new Map();
 const conversations = new Map();
 let crmSession = { token: '', expiresAt: 0 };
+let sellerDirectory = { items: [], expiresAt: 0 };
 const MAX_SEEN = 500;
 const MAX_HISTORY = 12;
 const HANDOFF_LOCK_MS = 12 * 60 * 60 * 1000;
+const SELLER_DIRECTORY_TTL_MS = 5 * 60 * 1000;
 const PORTFOLIO_REPLY = 'Claro! No Grupo ABR trabalhamos com telhas, incluindo Telhas PIR ABR Telhas, perfil estrutural, tubos e metalons, vergalhão, malha e treliça. Qual dessas linhas você quer conhecer melhor?';
 const BLOCKED_DESTINATION_PHONES = new Set(['5511999990001', '5511999990000']);
 const CITY_ALIASES = new Map([
@@ -429,6 +431,42 @@ function requestedPietra(text) {
   return wantsHumanSmart(text) && /\bpietra\b/.test(normalized);
 }
 
+function resolveNamedOperator(text, sellers = []) {
+  if (!wantsHumanSmart(text)) return null;
+  const normalized = normalizeText(text);
+  const available = sellers
+    .filter((seller) => normalizePhone(seller?.whatsapp_e164 || seller?.phone))
+    .map((seller) => {
+      const name = String(seller?.name || seller?.display_name || '').trim();
+      const normalizedName = normalizeText(name);
+      const parts = normalizedName.split(/\s+/).filter((part) => part.length >= 3);
+      return { seller, name, normalizedName, parts };
+    })
+    .filter((entry) => entry.name && entry.parts.length);
+
+  const fullMatches = available.filter((entry) => normalized.includes(entry.normalizedName));
+  const matches = fullMatches.length
+    ? fullMatches
+    : available.filter((entry) => entry.parts.every((part) => new RegExp(`\\b${part}\\b`).test(normalized)));
+  if (matches.length === 1) {
+    const match = matches[0];
+    return {
+      name: match.name,
+      phone: normalizePhone(match.seller.whatsapp_e164 || match.seller.phone),
+      userId: match.seller.user_id || null
+    };
+  }
+
+  const firstNameMatches = available.filter((entry) => new RegExp(`\\b${entry.parts[0]}\\b`).test(normalized));
+  if (firstNameMatches.length !== 1) return null;
+  const match = firstNameMatches[0];
+  return {
+    name: match.name,
+    phone: normalizePhone(match.seller.whatsapp_e164 || match.seller.phone),
+    userId: match.seller.user_id || null
+  };
+}
+
 function extractIncoming(payload) {
   if (isGroupPayload(payload)) return { ignored: 'group' };
 
@@ -605,6 +643,25 @@ async function crmFetch(path, options = {}) {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(`CRM HTTP ${response.status}: ${JSON.stringify(payload).slice(0, 300)}`);
   return payload;
+}
+
+async function listTransferOperators() {
+  if (sellerDirectory.expiresAt > Date.now() && sellerDirectory.items.length) return sellerDirectory.items;
+  const payload = await crmFetch('/v1/sellers');
+  const items = Array.isArray(payload?.items) ? payload.items : [];
+  sellerDirectory = { items, expiresAt: Date.now() + SELLER_DIRECTORY_TTL_MS };
+  return items;
+}
+
+async function requestedTransferTarget(text) {
+  if (!wantsHumanSmart(text)) return null;
+  try {
+    const target = resolveNamedOperator(text, await listTransferOperators());
+    if (target) return target;
+  } catch (error) {
+    console.error(JSON.stringify({ event: 'seller_directory_error', message: error.message }));
+  }
+  return requestedPietra(text) && pietraPhone ? { name: pietraName, phone: pietraPhone } : null;
 }
 
 async function getCrmToken() {
@@ -806,8 +863,9 @@ async function handleWebhook(req, res) {
   const purchaseRequest = wantsPurchase(text);
   if (purchaseRequest) conversation.purchaseIntent = true;
   if (quoteRequest) conversation.commercialHandoffRequested = true;
-  if ((explicitHandoff || conversation.purchaseIntent || conversation.commercialHandoffRequested) && pietraPhone) {
-    conversation.transferTarget = { name: pietraName, phone: pietraPhone };
+  if (explicitHandoff) {
+    const requestedTarget = await requestedTransferTarget(text);
+    conversation.transferTarget = requestedTarget;
   }
   if (explicitHandoff || ((conversation.purchaseIntent || conversation.commercialHandoffRequested) && conversation.city && conversation.product && hasQualificationDetail(conversation))) {
     conversation.pendingHandoff = true;
@@ -933,4 +991,4 @@ if (process.env.BOT_TEST_MODE !== 'true') {
   });
 }
 
-export { appendCrmCaseLink, commercialQualificationReply, enforceCommercialBoundaries, extractFactsSmart, greetingReply, handoffSummary, hasQualificationDetail, isReadyForHandoff, missingQuestions, purchaseInterestReply, qualificationReply, requestedPietra, wantsHumanSmart, wantsPortfolio, wantsPurchase, wantsQuote };
+export { appendCrmCaseLink, commercialQualificationReply, enforceCommercialBoundaries, extractFactsSmart, greetingReply, handoffSummary, hasQualificationDetail, isReadyForHandoff, missingQuestions, purchaseInterestReply, qualificationReply, requestedPietra, resolveNamedOperator, wantsHumanSmart, wantsPortfolio, wantsPurchase, wantsQuote };

@@ -22,6 +22,7 @@ export function missingQuestions(conversation: ConversationState): string[];
 export function purchaseInterestReply(conversation: ConversationState): string;
 export function qualificationReply(conversation: ConversationState): string;
 export function requestedPietra(text: string): boolean;
+export function resolveNamedOperator(text: string, sellers?: Array<Record<string, unknown>>): { name: string; phone: string; userId: string | null } | null;
 export function wantsHumanSmart(text: string): boolean;
 export function wantsPortfolio(text: string): boolean;
 export function wantsPurchase(text: string): boolean;
