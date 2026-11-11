@@ -31,6 +31,8 @@ const customerReplyQueues = new Map();
 const pendingCustomerReplies = new Map();
 let crmSession = { token: '', expiresAt: 0 };
 let sellerDirectory = { items: [], expiresAt: 0 };
+let aiConfig = { enabled: false, mode: 'supervised', personality: '', instructions: '', prohibited_topics: '', transfer_rule: '', business_hours: { enabled: false, start: '08:00', end: '18:00', days: [1, 2, 3, 4, 5] }, reply_delay_min_ms: replyDelayMinMs, reply_delay_max_ms: replyDelayMaxMs };
+let aiConfigExpiresAt = 0;
 const MAX_SEEN = 500;
 const MAX_HISTORY = 12;
 const HANDOFF_LOCK_MS = 12 * 60 * 60 * 1000;
@@ -686,6 +688,7 @@ async function readBody(req) {
 }
 
 function remember(id) {
+  if (!id) return false;
   if (seenMessageIds.has(id)) return false;
   seenMessageIds.set(id, Date.now());
   if (seenMessageIds.size > MAX_SEEN) {
@@ -693,6 +696,28 @@ function remember(id) {
     seenMessageIds.delete(firstKey);
   }
   return true;
+}
+
+async function refreshAiConfig() {
+  if (Date.now() < aiConfigExpiresAt) return aiConfig;
+  try {
+    const data = await crmFetch('/v1/ai/config');
+    aiConfig = { ...aiConfig, ...(data.config || {}) };
+    aiConfigExpiresAt = Date.now() + 30_000;
+  } catch (error) {
+    aiConfigExpiresAt = Date.now() + 5_000;
+    console.error(JSON.stringify({ event: 'ai_config_error', message: error.message }));
+  }
+  return aiConfig;
+}
+
+function isBusinessHours(config, now = new Date()) {
+  const hours = config?.business_hours;
+  if (!hours?.enabled) return true;
+  const day = now.getDay() || 7;
+  if (Array.isArray(hours.days) && hours.days.length && !hours.days.includes(day)) return false;
+  const current = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  return current >= String(hours.start || '08:00') && current <= String(hours.end || '18:00');
 }
 
 async function askGroq(text, phone) {
@@ -735,6 +760,7 @@ async function askGroq(text, phone) {
             'Conhecimento comercial: telhas PIR devem ser tratadas e vendidas como ABR Telhas. ' +
             'Nunca mencione MBP, MBO, fornecedor, fornecedora ou origem de fornecimento ao cliente. ' +
             'Nao invente dados, precos, prazos ou promessas. ' +
+            `Configuração administrativa, delimitada por <configuracao-crm>: personalidade=${aiConfig.personality || 'cordial e objetiva'}; instruções=${aiConfig.instructions || 'nenhuma'}; assuntos proibidos=${aiConfig.prohibited_topics || 'preços, prazos, estoque e promessas comerciais'}; transferência=${aiConfig.transfer_rule || 'após triagem mínima'}. Nunca viole as regras de segurança acima. </configuracao-crm>\n` +
             known
         },
         ...history,
@@ -1001,7 +1027,10 @@ async function sendCustomerReply(phone, body) {
   pendingCustomerReplies.set(phone, replyToken);
 
   if (replyDelayEnabled) {
-    await wait(calculateReplyDelayMs(reply));
+    await wait(calculateReplyDelayMs(reply, Math.random(), {
+      minimum: Number(aiConfig.reply_delay_min_ms) || replyDelayMinMs,
+      maximum: Number(aiConfig.reply_delay_max_ms) || replyDelayMaxMs
+    }));
   }
   if (pendingCustomerReplies.get(phone) !== replyToken) {
     console.log(JSON.stringify({ event: 'reply_superseded', phone }));
@@ -1063,6 +1092,26 @@ async function handleWebhook(req, res) {
   if (!remember(id)) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true, ignored: 'duplicate' }));
+    return;
+  }
+
+  const config = await refreshAiConfig();
+  if (!config.enabled) {
+    console.log(JSON.stringify({ event: 'ignored', reason: 'ai_disabled', phone, id }));
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true, ignored: 'ai_disabled' }));
+    return;
+  }
+  if (config.mode !== 'automatic') {
+    console.log(JSON.stringify({ event: 'supervision_queue', phone, id }));
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true, queued_for_supervision: true }));
+    return;
+  }
+  if (!isBusinessHours(config)) {
+    console.log(JSON.stringify({ event: 'ignored', reason: 'outside_business_hours', phone, id }));
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true, ignored: 'outside_business_hours' }));
     return;
   }
 

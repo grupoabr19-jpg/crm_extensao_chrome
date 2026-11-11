@@ -365,6 +365,19 @@ async function handler(req, res) {
       return send(res, 200, await storage.bootstrap());
     }
 
+    if (req.method === "GET" && url.pathname === "/v1/ai/config") {
+      await storage.ready();
+      return send(res, 200, await storage.getAiConfig());
+    }
+
+    if (req.method === "PATCH" && url.pathname === "/v1/ai/config") {
+      const user = requireRoles(req, res, ["admin", "supervisor"]);
+      if (!user) return;
+      const body = await readBody(req);
+      await storage.ready();
+      return send(res, 200, await storage.updateAiConfig(body, user.sub));
+    }
+
     if (req.method === "POST" && url.pathname === "/v1/ai/test") {
       if (!requireRoles(req, res, ["admin"])) return;
       if (!requireAdmin(req, res)) return;

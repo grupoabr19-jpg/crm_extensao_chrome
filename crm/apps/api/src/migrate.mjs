@@ -89,6 +89,9 @@ try {
   await applyMigration("0016_aster_sales_snapshots", async () => {
     await client.query(readFileSync(resolve(migrationsDir, "0016_aster_sales_snapshots.sql"), "utf8"));
   });
+  await applyMigration("0017_ai_configuration", async () => {
+    await client.query(readFileSync(resolve(migrationsDir, "0017_ai_configuration.sql"), "utf8"));
+  });
   await client.query("commit");
   console.log("Migrations concluidas.");
 } catch (err) {

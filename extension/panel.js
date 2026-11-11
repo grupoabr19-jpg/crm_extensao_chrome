@@ -56,7 +56,7 @@
     });
   }
   function $(id) { return sh.getElementById(id); }
-  function value(id) { return ($(id).value || '').trim(); }
+  function value(id) { var field = $(id); return field ? (field.value || '').trim() : ''; }
   function apiBase() { return (value('api') || DEFAULT_API).replace(/\/+$/, ''); }
   function apiOrigin() {
     try { return new URL(apiBase()).origin; } catch (_) { return ''; }
@@ -181,6 +181,7 @@
     };
     $('name').value = crmCase && crmCase.contact && crmCase.contact.name || customer && customer.name || chat.name || '';
     $('phone').value = crmCase && crmCase.contact && crmCase.contact.phone || customer && customer.phone || chat.phone || '';
+    if ($('email')) $('email').value = crmCase && crmCase.contact && crmCase.contact.email || customer && (customer.email || customerProfile.email) || '';
     $('company').value = fields.company || customerProfile.company || '';
     $('city').value = fields.city || customer && customer.city || customerProfile.city || '';
     $('uf').value = fields.uf || customer && customer.uf || customerProfile.uf || '';
@@ -207,7 +208,7 @@
   }
   function caseFormPayload() {
     return {
-      name: value('name'), phone: value('phone'), company: value('company'),
+      name: value('name'), phone: value('phone'), email: value('email'), company: value('company'),
       customerCode: activeCustomer && activeCustomer.customer_code || '',
       city: value('city'), uf: value('uf').toUpperCase(), source: value('source'),
       segment: value('segment'), department: value('department'),
@@ -239,6 +240,7 @@
     if (!payload) return;
     if (payload.name) $('name').value = payload.name;
     if (payload.phone) $('phone').value = payload.phone;
+    if (payload.email) $('email').value = payload.email;
     if (payload.company) $('company').value = payload.company;
     if (payload.city) $('city').value = payload.city;
     if (payload.uf) $('uf').value = payload.uf;
@@ -248,9 +250,6 @@
     updateQualification();
   }
   function aiTriage(commit, button) {
-    if (String(authUserEmail || '').toLowerCase() !== 'thiago.almeida@grupoabr.com.br') {
-      return say('A IA opera somente na conta thiago.almeida@grupoabr.com.br.', 'warn');
-    }
     var messages = visibleChatMessages();
     if (!messages.length) return say('Nao encontrei mensagens legiveis no chat aberto.', 'err');
     if (commit && !value('phone')) return say('Informe o telefone do cliente antes de criar e transferir.', 'warn');

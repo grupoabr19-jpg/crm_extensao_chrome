@@ -376,6 +376,23 @@ export function makeMemoryStorage({ protocol, handoffLink, externalHandoffMessag
     mode: "mvp-memory",
     ready: async () => {},
     bootstrap: async () => publicState(),
+    getAiConfig: async () => ({ config: db.aiConfig || {
+      enabled: false, mode: "supervised", personality: "Atendente cordial, objetivo e profissional do Grupo ABR.",
+      instructions: "", prohibited_topics: "preços, prazos, estoque, descontos e promessas comerciais",
+      transfer_rule: "Após a triagem mínima, transferir para o vendedor responsável pela região.",
+      business_hours: { enabled: false, start: "08:00", end: "18:00", days: [1, 2, 3, 4, 5] },
+      reply_delay_min_ms: 3500, reply_delay_max_ms: 7500
+    } }),
+    updateAiConfig: async (body) => {
+      const current = db.aiConfig || null;
+      db.aiConfig = {
+        ...(current || {}), ...body,
+        enabled: body.enabled === true,
+        mode: body.mode === "automatic" ? "automatic" : "supervised",
+        updated_at: new Date().toISOString()
+      };
+      return { config: db.aiConfig };
+    },
     registerDevice: async (body) => {
       const phone = normalizePhone(body.localPhone || "");
       const device = {
@@ -1376,6 +1393,19 @@ export function makePostgresStorage({ connectionString, protocol, handoffLink, e
       `, [ctx.org.id]);
       const users = await many("select id, display_name as name, role from users where organization_id=$1 order by display_name", [ctx.org.id]);
       return { organization: ctx.org, users, counts };
+    },
+    getAiConfig: async () => {
+      const ctx = await ready();
+      const row = await one("select enabled,mode,personality,instructions,prohibited_topics,transfer_rule,business_hours,reply_delay_min_ms,reply_delay_max_ms,updated_at::text from ai_configurations where organization_id=$1", [ctx.org.id]);
+      return { config: row || { enabled: false, mode: "supervised", personality: "Atendente cordial, objetivo e profissional do Grupo ABR.", instructions: "", prohibited_topics: "preços, prazos, estoque, descontos e promessas comerciais", transfer_rule: "Após a triagem mínima, transferir para o vendedor responsável pela região.", business_hours: { enabled: false, start: "08:00", end: "18:00", days: [1, 2, 3, 4, 5] }, reply_delay_min_ms: 3500, reply_delay_max_ms: 7500 } };
+    },
+    updateAiConfig: async (body, userId) => {
+      const ctx = await ready();
+      const result = await one(`insert into ai_configurations(organization_id,enabled,mode,personality,instructions,prohibited_topics,transfer_rule,business_hours,reply_delay_min_ms,reply_delay_max_ms,updated_by,updated_at)
+        values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,now())
+        on conflict (organization_id) do update set enabled=excluded.enabled,mode=excluded.mode,personality=excluded.personality,instructions=excluded.instructions,prohibited_topics=excluded.prohibited_topics,transfer_rule=excluded.transfer_rule,business_hours=excluded.business_hours,reply_delay_min_ms=excluded.reply_delay_min_ms,reply_delay_max_ms=excluded.reply_delay_max_ms,updated_by=excluded.updated_by,updated_at=now()
+        returning enabled,mode,personality,instructions,prohibited_topics,transfer_rule,business_hours,reply_delay_min_ms,reply_delay_max_ms,updated_at::text`, [ctx.org.id, body.enabled === true, body.mode === "automatic" ? "automatic" : "supervised", String(body.personality || "").slice(0, 2000), String(body.instructions || "").slice(0, 8000), String(body.prohibited_topics || "").slice(0, 2000), String(body.transfer_rule || "").slice(0, 4000), JSON.stringify(body.business_hours || { enabled: false, start: "08:00", end: "18:00", days: [1, 2, 3, 4, 5] }), Math.max(0, Math.min(15000, Number(body.reply_delay_min_ms) || 3500)), Math.max(0, Math.min(30000, Number(body.reply_delay_max_ms) || 7500)), userId || null]);
+      return { config: result };
     },
     registerDevice: async (body) => {
       const ctx = await ready();

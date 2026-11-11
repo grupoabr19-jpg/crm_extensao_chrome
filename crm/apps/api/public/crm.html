@@ -134,6 +134,20 @@
             <div class="tableScroll"><table><thead><tr><th>Colaborador</th><th>Acesso</th><th>Especialidade</th><th>Rotas ativas</th><th>Ações</th></tr></thead><tbody id="sellerRows"></tbody></table></div>
           </div>
         </div>
+        <section class="importBox" id="aiConfigPanel" aria-label="Configuração da IA" hidden>
+          <h2>Configuração da IA</h2>
+          <p>O telefone principal recebe os clientes. A IA faz a triagem, consulta as rotas cadastradas e transfere para o vendedor correto.</p>
+          <div class="importFiles">
+            <label><input id="aiEnabled" type="checkbox"> Ativar monitoramento automático</label>
+            <label for="aiMode">Modo de operação<select id="aiMode"><option value="supervised">Supervisionado</option><option value="automatic">Automático</option></select></label>
+            <label for="aiPersonality">Personalidade<textarea id="aiPersonality" rows="2"></textarea></label>
+            <label for="aiInstructions">Instruções adicionais<textarea id="aiInstructions" rows="2"></textarea></label>
+            <label for="aiProhibited">Assuntos proibidos<textarea id="aiProhibited" rows="2"></textarea></label>
+            <label for="aiTransferRule">Regra de transferência<textarea id="aiTransferRule" rows="2"></textarea></label>
+          </div>
+          <div class="importActions"><button class="button" id="saveAiConfig">Salvar configuração da IA</button><button class="button secondary" id="testAiConfig">Testar IA</button></div>
+          <div class="importStatus" id="aiConfigStatus" role="status" aria-live="polite"></div>
+        </section>
         <section class="importBox" id="customerImportPanel" aria-label="Importar cadastro de clientes" hidden>
           <h2>Importar cadastro de clientes</h2>
           <p>Gere a prévia dos dois arquivos e confira as quantidades antes de confirmar. O histórico só será associado quando o nome normalizado do cliente coincidir com um único registro; nomes ambíguos ou sem correspondência ficam sem vínculo. Nenhuma linha pessoal é exibida na prévia.</p>
@@ -250,7 +264,9 @@
       $('sessionUser').textContent = session.user.name || session.user.email;
       $('navAdmin').hidden = session.user.role !== 'admin';
       $('customerImportPanel').hidden = session.user.role !== 'admin';
+      $('aiConfigPanel').hidden = session.user.role !== 'admin';
       await loadProfile().catch(err => say('Erro ao carregar perfil: ' + err.message));
+      if (session.user.role === 'admin') await loadAiConfig().catch(err => say('Erro ao carregar configuração da IA: ' + err.message));
       await loadFunnels();
       if (!state.authToken || revision !== state.authRevision) return;
       await Promise.all([loadBoard(), loadKpis(), loadReactivationAlerts()]);
@@ -673,6 +689,28 @@
       renderProfile(data.profile || {});
       say('Perfil salvo.');
     }
+    async function loadAiConfig() {
+      const data = await json('/v1/ai/config');
+      const c = data.config || {};
+      $('aiEnabled').checked = c.enabled === true;
+      $('aiMode').value = c.mode || 'supervised';
+      $('aiPersonality').value = c.personality || '';
+      $('aiInstructions').value = c.instructions || '';
+      $('aiProhibited').value = c.prohibited_topics || '';
+      $('aiTransferRule').value = c.transfer_rule || '';
+      $('aiConfigStatus').textContent = c.enabled ? `IA ${c.mode === 'automatic' ? 'automática' : 'supervisionada'} ativa.` : 'IA desligada. Nenhuma resposta automática será enviada.';
+    }
+    async function saveAiConfig() {
+      const data = await json('/v1/ai/config', { method: 'PATCH', body: JSON.stringify({
+        enabled: $('aiEnabled').checked,
+        mode: $('aiMode').value,
+        personality: $('aiPersonality').value.trim(),
+        instructions: $('aiInstructions').value.trim(),
+        prohibited_topics: $('aiProhibited').value.trim(),
+        transfer_rule: $('aiTransferRule').value.trim()
+      }) });
+      $('aiConfigStatus').textContent = data.config?.enabled ? 'Configuração salva e disponível para o bot.' : 'Configuração salva com a IA desligada.';
+    }
     async function uploadCustomerWorkbook(kind, file, token) {
       const headers = {
         authorization: `Bearer ${state.authToken}`,
@@ -1007,6 +1045,8 @@
     $('clearSeller').onclick = clearSellerForm;
     $('saveProfile').onclick = () => saveProfile().catch(err => say('Erro ao salvar perfil: ' + err.message));
     $('reloadProfile').onclick = () => loadProfile().then(() => say('Perfil atualizado.')).catch(err => say('Erro: ' + err.message));
+    $('saveAiConfig').onclick = () => saveAiConfig().catch(err => $('aiConfigStatus').textContent = 'Erro: ' + err.message);
+    $('testAiConfig').onclick = () => { $('aiConfigStatus').textContent = 'Teste preparado. O modo automático continua sem alteração.'; };
     $('search').oninput = () => {
       state.query = $('search').value;
       renderBoard();

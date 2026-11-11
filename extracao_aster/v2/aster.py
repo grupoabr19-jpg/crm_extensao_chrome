@@ -89,12 +89,24 @@ class AsterExtractor:
         self._raise_if_session_lost(page)
         if config.report_card_selector:
             log.info("Aster: abrindo cartao do Resumo Comercial")
-            page.locator(config.report_card_selector).last.click()
+            report_card = page.locator(config.report_card_selector).last
+            # The workspace can leave a decorative overlay over the card while
+            # the dashboard finishes mounting. The card itself is the stable
+            # target, so wait briefly and force the click when the overlay
+            # continues intercepting pointer events.
+            report_card.wait_for(state="visible")
+            try:
+                report_card.click(timeout=10_000)
+            except PlaywrightTimeoutError:
+                report_card.click(force=True)
         # The report fields are the most stable indication that the card was
         # opened.  The former Reports-tab selector is optional and is used
         # only when a deployment has no date-field selector configured.
         if config.start_selector:
-            page.locator(self._selector(config.start_selector)).wait_for(state="visible")
+            start_probe = page.locator(self._selector(config.start_selector))
+            if start_probe.count() == 0:
+                start_probe = page.locator('form input[autocomplete="off"]').nth(0)
+            start_probe.wait_for(state="visible")
         elif config.report_ready_selector:
             page.locator(config.report_ready_selector).wait_for(state="visible")
         self._raise_if_session_lost(page)
@@ -102,20 +114,34 @@ class AsterExtractor:
         formatted_date = reference_date.strftime("%d/%m/%Y")
         if config.start_selector:
             start_selector = self._selector(config.start_selector)
+            start = page.locator(start_selector)
+            if start.count() == 0:
+                start = page.locator('form input[autocomplete="off"]').nth(0)
             log.info("Aster: preenchendo data inicial")
-            page.locator(start_selector).fill(formatted_date)
-            page.locator(start_selector).press("Tab")
+            start.fill(formatted_date)
+            start.press("Tab")
         if config.end_selector:
             end_selector = self._selector(config.end_selector)
+            end = page.locator(end_selector)
+            if end.count() == 0:
+                end = page.locator('form input[autocomplete="off"]').nth(1)
             log.info("Aster: preenchendo data final")
-            page.locator(end_selector).fill(formatted_date)
-            page.locator(end_selector).press("Tab")
+            end.fill(formatted_date)
+            end.press("Tab")
         if not config.download_selector:
             raise ValueError("ASTER_REPORT_DOWNLOAD_SELECTOR é obrigatório na nova versão")
 
+        download_button = page.locator(config.download_selector)
+        if download_button.count() == 0:
+            # Current Aster builds require confirming the date form first;
+            # the export control is rendered only after the report loads.
+            page.get_by_role("button", name="Confirmar").click()
+            download_button = page.locator(config.download_selector)
+            download_button.wait_for(state="visible", timeout=90_000)
+
         with page.expect_download(timeout=90_000) as download_info:
             log.info("Aster: solicitando download")
-            page.locator(config.download_selector).click()
+            download_button.click()
         download = download_info.value
         suffix = Path(download.suggested_filename).suffix.lower() or ".csv"
         path = output_dir / f"resumo_comercial_{stamp}{suffix}"
